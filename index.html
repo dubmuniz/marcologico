@@ -2,116 +2,108 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico - Entrada</title>
+  <title>Marco Lógico - Gerador IA</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    :root{--hb-green:#1E7E34;--hb-accent:#FFC857;--ink:#1b1b1b;--bg:#fafafa;--muted:#667085}
+    :root{--green:#1E7E34;--accent:#FFC857;--ink:#1b1b1b;--bg:#fafafa;--muted:#667085}
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui}
     .wrap{max-width:900px;margin:0 auto;padding:20px}
-    header{text-align:center;padding-top:28px;margin-bottom:40px}
-    .brand{display:inline-flex;align-items:center;gap:12px;justify-content:center}
-    .logo{width:100px;height:auto}
-    h1{margin:10px 0 6px;font-size:26px}
-    p.lead{color:var(--muted);margin:0 0 10px}
+    header{text-align:center;padding:28px 0 40px}
+    h1{margin:0 0 10px;font-size:28px}
+    .lead{color:var(--muted);margin:0}
     form{background:#fff;border:1px solid #eee;border-radius:12px;padding:30px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
     .form-section{margin-bottom:32px}
-    .form-section h2{font-size:18px;font-weight:600;margin:0 0 20px;color:var(--ink);border-bottom:2px solid var(--hb-green);padding-bottom:10px}
+    .form-section h2{font-size:18px;font-weight:600;margin:0 0 20px;color:var(--ink);border-bottom:2px solid var(--green);padding-bottom:10px}
     label{display:block;margin:16px 0 6px;font-weight:600;color:var(--ink)}
-    input,textarea,select{width:100%;margin-top:6px;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit;line-height:1.5}
+    input[type="text"],textarea,input[type="file"],select{width:100%;margin-top:6px;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit;line-height:1.5}
+    input[type="file"]{padding:8px}
     textarea{resize:vertical;min-height:100px}
     .note{font-size:12px;color:#80888c;margin-top:6px}
-    .info-box{background:#f0f7f4;border-left:4px solid var(--hb-green);padding:12px;border-radius:6px;margin:12px 0;font-size:13px;color:var(--ink)}
-    .buttons{display:flex;gap:12px;margin-top:30px}
-    button{background:var(--hb-green);color:#fff;border:0;border-radius:10px;padding:12px 24px;font-weight:600;cursor:pointer;transition:all 0.2s;font-size:16px;flex:1}
+    .file-info{background:#f0f7f4;border-left:4px solid var(--green);padding:12px;border-radius:6px;margin:12px 0;font-size:13px}
+    button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 24px;font-weight:600;cursor:pointer;transition:all 0.2s;font-size:16px;width:100%}
     button:hover:not(:disabled){filter:brightness(1.05)}
     button:disabled{opacity:0.6;cursor:not-allowed}
     .status{min-height:22px;color:var(--muted);margin:16px 0 0;font-size:14px}
     .status.error{color:#d32f2f}
-    .status.success{color:var(--hb-green)}
-    footer{color:#80888c;font-size:12px;text-align:center;padding:24px 0}
-
+    .status.success{color:var(--green)}
+    .loading-spinner{display:inline-block;width:16px;height:16px;border:2px solid #e3e8ee;border-top:2px solid var(--green);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:8px}
+    @keyframes spin{0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)}}
+    
     .objetivos-section{display:none;margin-top:30px}
     .objetivos-section.ativa{display:block}
     .objetivo-input-group{background:#f9f9f9;border:1px solid #e3e8ee;border-radius:8px;padding:16px;margin:12px 0}
-    .objetivo-input-group h4{margin:0 0 12px;color:var(--hb-green);font-size:14px}
+    .objetivo-input-group h4{margin:0 0 12px;color:var(--green);font-size:14px}
     .objetivo-input-group input{margin-bottom:12px}
-    .objetivo-input-group textarea{min-height:80px}
-
-    .contador{display:inline-block;background:var(--hb-accent);color:#111;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:8px}
-    .loading-spinner{display:inline-block;width:16px;height:16px;border:2px solid #e3e8ee;border-top:2px solid var(--hb-green);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:8px}
-    @keyframes spin{0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)}}
+    .objetivo-input-group textarea{min-height:80px;margin-bottom:12px}
+    .objetivo-input-group label{margin:0}
+    
+    .contador{display:inline-block;background:var(--accent);color:#111;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:8px}
   </style>
 </head>
 <body>
   <header class="wrap">
-    <div class="brand">
-      <img src="./Humana Logo.png" alt="Humana Logo" class="logo">
-      <strong>Humana Povo para Povo Brasil</strong>
-    </div>
     <h1>🎯 Marco Lógico</h1>
-    <p class="lead">Criar um marco lógico completo para seu projeto</p>
+    <p class="lead">Gere marcos lógicos automaticamente com IA a partir do edital</p>
   </header>
 
   <main class="wrap">
     <form id="marcoForm" novalidate>
       
-      <!-- SEÇÃO 1: Objetivo Geral -->
+      <!-- SEÇÃO 1: Edital -->
       <div class="form-section">
-        <h2>🎯 Objetivo Geral</h2>
-        <label>Qual é o objetivo geral do seu projeto? *
-          <textarea name="objetivo_geral" id="objetivoGeral" required placeholder="Ex: Transformar o turismo na Ilha do Bananal em motor de regeneração ecológica e sociocultural, assegurando renda digna às comunidades"></textarea>
-          <div class="note">Descreva de forma clara e concisa o resultado principal que seu projeto quer alcançar</div>
+        <h2>📄 Edital da Chamada</h2>
+        <label>Upload do Edital (TXT) *
+          <input type="file" id="edital" accept=".txt" required>
+          <div class="note">Copie o texto completo do edital e salve como .txt</div>
+        </label>
+        <div id="editalInfo" class="file-info" style="display:none"></div>
+      </div>
+
+      <!-- SEÇÃO 2: Nome do Projeto -->
+      <div class="form-section">
+        <h2>🏷️ Projeto</h2>
+        <label>Nome do Projeto *
+          <input type="text" id="nomeProjeto" placeholder="Ex: Turismo Regenerativo na Ilha do Bananal" required>
         </label>
       </div>
 
-      <!-- SEÇÃO 2: Número de Objetivos -->
+      <!-- SEÇÃO 3: Descrição da Proposta -->
+      <div class="form-section">
+        <h2>✍️ Descrição da Proposta</h2>
+        <label>O que seu projeto faz? *
+          <textarea id="descricaoProposta" placeholder="Descreva brevemente o que seu projeto propõe, contexto, atividades e beneficiários. Máximo 2000 caracteres." required></textarea>
+          <div class="note">A IA usará o edital + proposta para gerar o marco lógico</div>
+        </label>
+      </div>
+
+      <!-- SEÇÃO 4: Número de Objetivos Específicos -->
       <div class="form-section">
         <h2>📊 Estrutura do Marco</h2>
         <label>Quantos Objetivos Específicos seu projeto terá? *
-          <select name="num_objetivos" id="numObjetivos" required>
+          <select id="numObjetivos" required>
             <option value="">Selecione...</option>
-            <option value="1">1 objetivo</option>
             <option value="2">2 objetivos</option>
             <option value="3">3 objetivos</option>
             <option value="4">4 objetivos</option>
             <option value="5">5 objetivos</option>
-            <option value="6">6 objetivos</option>
-            <option value="7">7 objetivos</option>
           </select>
           <div class="note">Escolha quantos pilares principais seu projeto terá</div>
         </label>
       </div>
 
-      <!-- SEÇÃO 3: Preencher Objetivos Específicos -->
+      <!-- SEÇÃO 5: Preencher Objetivos Específicos -->
       <div class="form-section objetivos-section" id="objetivosSection">
         <h2>📌 Objetivos Específicos <span class="contador" id="contadorOE">0</span></h2>
-        <p style="color:var(--muted);font-size:13px">Preencha cada objetivo específico que deseja incluir no marco lógico. A IA gerará automaticamente os resultados, indicadores e atividades para cada um.</p>
+        <p style="color:var(--muted);font-size:13px">Preencha cada objetivo específico. A IA gerará resultados, indicadores e atividades para cada um.</p>
         <div id="objetivosContainer"></div>
       </div>
 
-      <!-- SEÇÃO 4: Contexto -->
-      <div class="form-section">
-        <h2>✏️ Contexto do Projeto</h2>
-        <label>Contexto, desafios e pressupostos (opcional)
-          <textarea name="contexto" placeholder="Descreva brevemente o contexto do projeto, principais desafios, e fatores externos que podem afetar o sucesso. Isso ajudará a IA a personalizar melhor os marcos lógicos."></textarea>
-          <div class="note">Quanto melhor o contexto, melhor a IA personalizará o marco lógico</div>
-        </label>
-      </div>
-
-      <div class="info-box">
-        <strong>💡 Como funciona:</strong><br>
-        1. Você preenche o Objetivo Geral e os Objetivos Específicos<br>
-        2. A IA gera automaticamente 2-3 Resultados por Objetivo<br>
-        3. Para cada Resultado: 3 Indicadores SMART + 2-5 Atividades<br>
-        4. Tudo pronto em um arquivo Excel profissional!
-      </div>
-
-      <!-- BOTÕES -->
+      <!-- BOTÃO SUBMIT -->
       <div style="text-align:center;margin-top:30px">
         <button type="submit" id="submitBtn">🚀 Gerar Marco Lógico</button>
         <p id="status" class="status" role="status" aria-live="polite"></p>
@@ -120,17 +112,40 @@
     </form>
   </main>
 
-  <footer>© Humana Povo para Povo Brasil | Marco Lógico</footer>
-
   <script>
     const form = document.getElementById('marcoForm');
+    const editalInput = document.getElementById('edital');
+    const editalInfo = document.getElementById('editalInfo');
     const numObjetivosSelect = document.getElementById('numObjetivos');
     const objetivosSection = document.getElementById('objetivosSection');
     const objetivosContainer = document.getElementById('objetivosContainer');
     const contadorOE = document.getElementById('contadorOE');
     const statusEl = document.getElementById('status');
+    const submitBtn = document.getElementById('submitBtn');
 
-    // Quando mudar número de objetivos, gerar campos de entrada
+    let editalConteudo = '';
+
+    // Quando arquivo é selecionado
+    editalInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        editalConteudo = await file.text();
+        exibirInfoEdital(file.name, editalConteudo.length);
+      } catch (err) {
+        statusEl.textContent = `❌ Erro ao ler arquivo: ${err.message}`;
+        statusEl.classList.add('error');
+      }
+    });
+
+    function exibirInfoEdital(nome, tamanho) {
+      editalInfo.innerHTML = `✓ ${nome} (${(tamanho/1024).toFixed(2)}KB) carregado`;
+      editalInfo.style.display = 'block';
+      statusEl.textContent = '';
+    }
+
+    // Quando muda número de objetivos
     numObjetivosSelect.addEventListener('change', (e) => {
       const numObjetivos = parseInt(e.target.value) || 0;
       
@@ -153,75 +168,82 @@
         
         div.innerHTML = `
           <h4>Objetivo Específico ${i}</h4>
-          <input 
-            type="text" 
-            name="oe_titulo_${i}" 
-            placeholder="Título do objetivo (ex: Fortalecer Capacidades Comunitárias)"
-            required
-          >
-          <textarea 
-            name="oe_descricao_${i}" 
-            placeholder="Descrição breve do que será alcançado com este objetivo"
-            required
-          ></textarea>
+          <label style="margin:0 0 12px 0;font-weight:600;display:block">
+            Título do Objetivo *
+            <input 
+              type="text" 
+              name="oe_titulo_${i}" 
+              placeholder="Ex: Fortalecer Capacidades Comunitárias"
+              required
+            >
+          </label>
+          <label style="margin:0;font-weight:600;display:block">
+            Descrição do Objetivo *
+            <textarea 
+              name="oe_descricao_${i}" 
+              placeholder="O que será alcançado com este objetivo específico"
+              required
+            ></textarea>
+          </label>
         `;
         
         objetivosContainer.appendChild(div);
       }
     }
 
-    // Enviar formulário DIRETO para Claude via webhook
+    // Enviar formulário
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      const submitBtn = document.getElementById('submitBtn');
+      if (!editalConteudo) {
+        statusEl.textContent = '❌ Por favor, carregue um arquivo de edital';
+        statusEl.classList.add('error');
+        return;
+      }
+
+      const nomeProjeto = document.getElementById('nomeProjeto').value.trim();
+      const descricaoProposta = document.getElementById('descricaoProposta').value.trim();
+      const numObjetivos = parseInt(document.getElementById('numObjetivos').value);
+
+      if (!nomeProjeto || !descricaoProposta || !numObjetivos) {
+        statusEl.textContent = '❌ Por favor, preencha todos os campos obrigatórios';
+        statusEl.classList.add('error');
+        return;
+      }
+
+      // Validar objetivos específicos
+      const objetivosEspecificos = [];
+      for (let i = 1; i <= numObjetivos; i++) {
+        const titulo = form[`oe_titulo_${i}`].value.trim();
+        const descricao = form[`oe_descricao_${i}`].value.trim();
+        
+        if (!titulo || !descricao) {
+          statusEl.textContent = `❌ Por favor, preencha o Objetivo Específico ${i}`;
+          statusEl.classList.add('error');
+          return;
+        }
+
+        objetivosEspecificos.push({
+          numero: i,
+          titulo: titulo,
+          descricao: descricao
+        });
+      }
+
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span>⏳ Gerando Marco Lógico...</span><div class="loading-spinner"></div>';
-      statusEl.textContent = '';
+      statusEl.textContent = '⏳ Processando com IA (pode levar 2-3 minutos)...';
       statusEl.classList.remove('error', 'success');
 
       try {
-        const objetivoGeral = form.objetivo_geral.value.trim();
-        const numObjetivos = parseInt(form.num_objetivos.value);
-        const contexto = form.contexto.value.trim();
-
-        if (!objetivoGeral || !numObjetivos) {
-          throw new Error('Por favor, preencha o Objetivo Geral e selecione o número de objetivos');
-        }
-
-        // Coletar Objetivos Específicos preenchidos
-        const objetivosEspecificos = [];
-        for (let i = 1; i <= numObjetivos; i++) {
-          const titulo = form[`oe_titulo_${i}`].value.trim();
-          const descricao = form[`oe_descricao_${i}`].value.trim();
-          
-          if (!titulo || !descricao) {
-            throw new Error(`Por favor, preencha o Objetivo Específico ${i}`);
-          }
-
-          objetivosEspecificos.push({
-            numero: i,
-            titulo: titulo,
-            descricao: descricao
-          });
-        }
-
-        // Preparar dados para enviar direto para Claude
         const payload = {
-          objetivo_geral: objetivoGeral,
-          num_objetivos: numObjetivos,
-          objetivos_especificos: objetivosEspecificos,
-          contexto: contexto
+          edital: editalConteudo,
+          nomeProjeto: nomeProjeto,
+          descricaoProposta: descricaoProposta,
+          objetivosEspecificos: objetivosEspecificos
         };
 
-        console.log('📤 Enviando para Claude via Webhook:', payload);
-
-        // WEBHOOK URL - APONTA DIRETO PARA CLAUDE
-        // Configurar em Make.com: Webhook → Claude
         const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
-
-        statusEl.textContent = '⏳ Processando com IA (pode levar 2-3 minutos)...';
-        statusEl.classList.add('success');
 
         const response = await fetch(WEBHOOK_URL, {
           method: 'POST',
@@ -234,9 +256,8 @@
         }
 
         let responseText = await response.text();
-        console.log('📥 Resposta recebida');
+        console.log('Resposta recebida:', responseText);
 
-        // Parse JSON (limpar markdown se necessário)
         let marcoLogico;
         try {
           marcoLogico = JSON.parse(responseText);
@@ -248,23 +269,17 @@
           marcoLogico = JSON.parse(cleanJson);
         }
 
-        console.log('✅ Marco Lógico gerado:', marcoLogico);
+        console.log('Marco Lógico gerado:', marcoLogico);
 
-        // Salvar em sessionStorage
-        sessionStorage.setItem('marcoLogico', JSON.stringify(marcoLogico));
-        sessionStorage.setItem('marcoData', JSON.stringify(payload));
-
-        statusEl.textContent = '✅ Marco Lógico gerado! Redirecionando...';
-        statusEl.classList.remove('success');
+        statusEl.textContent = '✅ Marco Lógico gerado! Gerando XLSX...';
+        statusEl.classList.remove('error');
         statusEl.classList.add('success');
 
-        // Redirecionar para visualização
-        setTimeout(() => {
-          window.location.href = 'marco-logico-simples-tela-resultado.html';
-        }, 1500);
+        // Gerar XLSX
+        gerarXLSX(marcoLogico, nomeProjeto);
 
       } catch (err) {
-        console.error('❌ ERRO:', err);
+        console.error('Erro:', err);
         statusEl.textContent = `❌ Erro: ${err.message}`;
         statusEl.classList.add('error');
       } finally {
@@ -272,6 +287,61 @@
         submitBtn.innerHTML = '🚀 Gerar Marco Lógico';
       }
     });
+
+    function gerarXLSX(marco, nomeProjeto) {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js';
+      script.onload = () => {
+        const wb = XLSX.utils.book_new();
+        
+        // Aba 1: Resumo
+        const resumo = [
+          ['PROJETO', nomeProjeto],
+          ['OBJETIVO GERAL', marco.marco_logico?.objetivo_geral || ''],
+          ['DATA GERAÇÃO', new Date().toLocaleDateString('pt-BR')],
+          [''],
+          ['ESTATÍSTICAS'],
+          ['Objetivos Específicos', marco.marco_logico?.objetivos_especificos?.length || 0],
+          ['Resultados', marco.marco_logico?.objetivos_especificos?.reduce((acc, oe) => acc + (oe.resultados?.length || 0), 0) || 0],
+          ['Indicadores', marco.marco_logico?.objetivos_especificos?.reduce((acc, oe) => {
+            return acc + oe.resultados?.reduce((acc2, r) => acc2 + (r.indicadores?.length || 0), 0);
+          }, 0) || 0],
+          ['Atividades', marco.marco_logico?.objetivos_especificos?.reduce((acc, oe) => {
+            return acc + oe.resultados?.reduce((acc2, r) => acc2 + (r.atividades?.length || 0), 0);
+          }, 0) || 0]
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumo), 'Resumo');
+        
+        // Aba 2: Marco Completo
+        const marcoData = [];
+        marcoData.push(['OE', 'RESULTADO', 'INDICADOR', 'META', 'ATIVIDADE', 'LÓGICA', 'PRAZO', 'VERIFICAÇÃO']);
+        
+        marco.marco_logico?.objetivos_especificos?.forEach(oe => {
+          oe.resultados?.forEach(result => {
+            result.atividades?.forEach((atv, idx) => {
+              const ind = result.indicadores?.[idx] || {};
+              marcoData.push([
+                oe.numero === marcoData.length - 1 ? oe.titulo : '',
+                marcoData.length === 1 ? result.titulo : (idx === 0 ? result.titulo : ''),
+                ind.texto || '',
+                ind.meta || '',
+                atv.descricao || '',
+                atv.logica_intervencao || '',
+                atv.prazo || '',
+                atv.meios_verificacao || ''
+              ]);
+            });
+          });
+        });
+        
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(marcoData), 'Marco Lógico');
+        XLSX.writeFile(wb, `Marco_Logico_${nomeProjeto.replace(/\s+/g, '_')}.xlsx`);
+        
+        statusEl.textContent = '✅ XLSX gerado e baixado com sucesso!';
+      };
+      document.head.appendChild(script);
+    }
 
   </script>
 
