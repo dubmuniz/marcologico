@@ -47,6 +47,9 @@
 </head>
 <body>
   <header class="wrap">
+    <div class="brand">
+      <img src="./Humana Logo.png" alt="Humana Logo" class="logo" style="width:100px;height:auto;margin-bottom:20px">
+    </div>
     <h1>🎯 Marco Lógico</h1>
     <p class="lead">Gere marcos lógicos automaticamente com IA a partir do edital</p>
   </header>
@@ -57,9 +60,9 @@
       <!-- SEÇÃO 1: Edital -->
       <div class="form-section">
         <h2>📄 Edital da Chamada</h2>
-        <label>Upload do Edital (TXT) *
-          <input type="file" id="edital" accept=".txt" required>
-          <div class="note">Copie o texto completo do edital e salve como .txt</div>
+        <label>Upload do Edital (PDF, DOCX ou TXT) *
+          <input type="file" id="edital" accept=".pdf,.docx,.txt" required>
+          <div class="note">Aceita PDF, DOCX ou TXT (máximo 10MB)</div>
         </label>
         <div id="editalInfo" class="file-info" style="display:none"></div>
       </div>
@@ -112,6 +115,8 @@
     </form>
   </main>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.min.js"></script>
   <script>
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
@@ -125,17 +130,50 @@
 
     let editalConteudo = '';
 
+    // Ler PDF
+    async function lerPDF(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+      let texto = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        texto += content.items.map(item => item.str).join(' ') + '\n';
+      }
+      return texto;
+    }
+
+    // Ler DOCX
+    async function lerDOCX(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({arrayBuffer: arrayBuffer});
+      return result.value;
+    }
+
     // Quando arquivo é selecionado
     editalInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
+      statusEl.textContent = '📖 Lendo arquivo...';
+      statusEl.classList.remove('error', 'success');
+
       try {
-        editalConteudo = await file.text();
+        if (file.name.endsWith('.txt') || file.type === 'text/plain') {
+          editalConteudo = await file.text();
+        } else if (file.name.endsWith('.pdf') || file.type === 'application/pdf') {
+          editalConteudo = await lerPDF(file);
+        } else if (file.name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          editalConteudo = await lerDOCX(file);
+        } else {
+          throw new Error('Formato não suportado. Use PDF, DOCX ou TXT');
+        }
         exibirInfoEdital(file.name, editalConteudo.length);
       } catch (err) {
         statusEl.textContent = `❌ Erro ao ler arquivo: ${err.message}`;
         statusEl.classList.add('error');
+        editalInput.value = '';
       }
     });
 
@@ -243,7 +281,7 @@
           objetivosEspecificos: objetivosEspecificos
         };
 
-        const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
+        const WEBHOOK_URL = 'https://hook.us2.make.com/SEU_WEBHOOK_AQUI';
 
         const response = await fetch(WEBHOOK_URL, {
           method: 'POST',
