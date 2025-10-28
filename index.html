@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico - Etapa 1 - Definição de Objetivos</title>
+  <title>Marco Lógico - Entrada</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,36 +18,33 @@
     .logo{width:100px;height:auto}
     h1{margin:10px 0 6px;font-size:26px}
     p.lead{color:var(--muted);margin:0 0 10px}
-    .progress-bar{width:100%;height:8px;background:#e3e8ee;border-radius:10px;margin:20px 0;overflow:hidden}
-    .progress-fill{height:100%;background:var(--hb-green);width:33%;transition:width 0.3s}
-    .step-indicator{display:flex;justify-content:space-between;margin:20px 0;font-size:12px;color:var(--muted)}
-    .step-dot{width:30px;height:30px;border-radius:50%;background:#e3e8ee;display:flex;align-items:center;justify-content:center;font-weight:600}
-    .step-dot.active{background:var(--hb-green);color:#fff}
-    .step-dot.done{background:var(--hb-accent);color:#111}
     form{background:#fff;border:1px solid #eee;border-radius:12px;padding:30px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
     .form-section{margin-bottom:32px}
     .form-section h2{font-size:18px;font-weight:600;margin:0 0 20px;color:var(--ink);border-bottom:2px solid var(--hb-green);padding-bottom:10px}
     label{display:block;margin:16px 0 6px;font-weight:600;color:var(--ink)}
     input,textarea,select{width:100%;margin-top:6px;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit;line-height:1.5}
-    textarea{resize:vertical;min-height:140px}
+    textarea{resize:vertical;min-height:100px}
     .note{font-size:12px;color:#80888c;margin-top:6px}
     .info-box{background:#f0f7f4;border-left:4px solid var(--hb-green);padding:12px;border-radius:6px;margin:12px 0;font-size:13px;color:var(--ink)}
     .buttons{display:flex;gap:12px;margin-top:30px}
     button{background:var(--hb-green);color:#fff;border:0;border-radius:10px;padding:12px 24px;font-weight:600;cursor:pointer;transition:all 0.2s;font-size:16px;flex:1}
     button:hover:not(:disabled){filter:brightness(1.05)}
     button:disabled{opacity:0.6;cursor:not-allowed}
-    .btn-secondary{background:#667085;color:#fff}
     .status{min-height:22px;color:var(--muted);margin:16px 0 0;font-size:14px}
     .status.error{color:#d32f2f}
     .status.success{color:var(--hb-green)}
     footer{color:#80888c;font-size:12px;text-align:center;padding:24px 0}
-    .grid-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-    @media (max-width:700px){
-      .grid-cols{grid-template-columns:1fr}
-    }
-    .number-input-wrapper{position:relative}
-    .number-input-wrapper input{width:100%}
-    .range-info{font-size:12px;color:var(--muted);margin-top:4px}
+
+    .objetivos-section{display:none;margin-top:30px}
+    .objetivos-section.ativa{display:block}
+    .objetivo-input-group{background:#f9f9f9;border:1px solid #e3e8ee;border-radius:8px;padding:16px;margin:12px 0}
+    .objetivo-input-group h4{margin:0 0 12px;color:var(--hb-green);font-size:14px}
+    .objetivo-input-group input{margin-bottom:12px}
+    .objetivo-input-group textarea{min-height:80px}
+
+    .contador{display:inline-block;background:var(--hb-accent);color:#111;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:8px}
+    .loading-spinner{display:inline-block;width:16px;height:16px;border:2px solid #e3e8ee;border-top:2px solid var(--hb-green);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:8px}
+    @keyframes spin{0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
@@ -56,99 +53,67 @@
       <img src="./Humana Logo.png" alt="Humana Logo" class="logo">
       <strong>Humana Povo para Povo Brasil</strong>
     </div>
-    <h1>Marco Lógico - Etapa 1</h1>
-    <p class="lead">Defina o objetivo geral e estrutura inicial do seu Marco Lógico</p>
+    <h1>🎯 Marco Lógico</h1>
+    <p class="lead">Criar um marco lógico completo para seu projeto</p>
   </header>
-
-  <div class="wrap">
-    <div class="progress-bar">
-      <div class="progress-fill" id="progressFill"></div>
-    </div>
-    <div class="step-indicator">
-      <div style="display:flex;flex-direction:column;align-items:center">
-        <div class="step-dot done">✓</div>
-        <small>Ficha</small>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center">
-        <div class="step-dot active">1</div>
-        <small>Objetivos</small>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center">
-        <div class="step-dot">2</div>
-        <small>Estrutura</small>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:center">
-        <div class="step-dot">3</div>
-        <small>Marco Gerado</small>
-      </div>
-    </div>
-  </div>
 
   <main class="wrap">
     <form id="marcoForm" novalidate>
       
-      <div class="form-section">
-        <h2>📋 Informações da Ficha Anterior</h2>
-        <div class="info-box">
-          <strong>Nome do Projeto:</strong> <span id="projectNameDisplay"></span><br>
-          <strong>Resumo:</strong> <span id="projectSummaryDisplay"></span>
-        </div>
-      </div>
-
+      <!-- SEÇÃO 1: Objetivo Geral -->
       <div class="form-section">
         <h2>🎯 Objetivo Geral</h2>
-        <label>Objetivo Geral do Projeto *
-          <input name="objetivo_geral" type="text" required placeholder="Ex: Transformar o turismo na região em motor de desenvolvimento sustentável com autonomia para comunidades locais" maxlength="300">
+        <label>Qual é o objetivo geral do seu projeto? *
+          <textarea name="objetivo_geral" id="objetivoGeral" required placeholder="Ex: Transformar o turismo na Ilha do Bananal em motor de regeneração ecológica e sociocultural, assegurando renda digna às comunidades"></textarea>
           <div class="note">Descreva de forma clara e concisa o resultado principal que seu projeto quer alcançar</div>
         </label>
       </div>
 
+      <!-- SEÇÃO 2: Número de Objetivos -->
       <div class="form-section">
-        <h2>📊 Estrutura do Marco Lógico</h2>
-        
-        <div class="grid-cols">
-          <div>
-            <label>Número de Objetivos Específicos *
-              <select name="num_objetivos" id="numObjetivos" required>
-                <option value="">Selecione...</option>
-                <option value="2">2 objetivos</option>
-                <option value="3">3 objetivos</option>
-                <option value="4">4 objetivos</option>
-                <option value="5">5 objetivos</option>
-              </select>
-              <div class="note">Quantos objetivos específicos seu projeto terá?</div>
-            </label>
-          </div>
-
-          <div>
-            <label>Média de Resultados por Objetivo *
-              <select name="resultados_por_objetivo" id="resultadosPorObjetivo" required>
-                <option value="">Selecione...</option>
-                <option value="2">2 resultados</option>
-                <option value="3">3 resultados</option>
-                <option value="4">4 resultados</option>
-              </select>
-              <div class="note">Quantos resultados espera por cada objetivo?</div>
-            </label>
-          </div>
-        </div>
-
-        <div class="info-box" id="estimativaAtividades" style="margin-top:20px">
-          <strong>📈 Estimativa Automática:</strong><br>
-          <span id="estimativaText">Total estimado: carregando...</span>
-        </div>
-      </div>
-
-      <div class="form-section">
-        <h2>✏️ Contexto do Marco Lógico</h2>
-        <label>Contexto e Pressupostos Principais *
-          <textarea name="contexto" required placeholder="Descreva o contexto do projeto, principais desafios, pressupostos e fatores externos que podem afetar o sucesso. Ex: Contexto de demanda por turismo sustentável, capacidade produtiva local, políticas públicas de apoio..."></textarea>
-          <div class="note">Este contexto será considerado na geração do Marco Lógico</div>
+        <h2>📊 Estrutura do Marco</h2>
+        <label>Quantos Objetivos Específicos seu projeto terá? *
+          <select name="num_objetivos" id="numObjetivos" required>
+            <option value="">Selecione...</option>
+            <option value="1">1 objetivo</option>
+            <option value="2">2 objetivos</option>
+            <option value="3">3 objetivos</option>
+            <option value="4">4 objetivos</option>
+            <option value="5">5 objetivos</option>
+            <option value="6">6 objetivos</option>
+            <option value="7">7 objetivos</option>
+          </select>
+          <div class="note">Escolha quantos pilares principais seu projeto terá</div>
         </label>
       </div>
 
+      <!-- SEÇÃO 3: Preencher Objetivos Específicos -->
+      <div class="form-section objetivos-section" id="objetivosSection">
+        <h2>📌 Objetivos Específicos <span class="contador" id="contadorOE">0</span></h2>
+        <p style="color:var(--muted);font-size:13px">Preencha cada objetivo específico que deseja incluir no marco lógico. A IA gerará automaticamente os resultados, indicadores e atividades para cada um.</p>
+        <div id="objetivosContainer"></div>
+      </div>
+
+      <!-- SEÇÃO 4: Contexto -->
+      <div class="form-section">
+        <h2>✏️ Contexto do Projeto</h2>
+        <label>Contexto, desafios e pressupostos (opcional)
+          <textarea name="contexto" placeholder="Descreva brevemente o contexto do projeto, principais desafios, e fatores externos que podem afetar o sucesso. Isso ajudará a IA a personalizar melhor os marcos lógicos."></textarea>
+          <div class="note">Quanto melhor o contexto, melhor a IA personalizará o marco lógico</div>
+        </label>
+      </div>
+
+      <div class="info-box">
+        <strong>💡 Como funciona:</strong><br>
+        1. Você preenche o Objetivo Geral e os Objetivos Específicos<br>
+        2. A IA gera automaticamente 2-3 Resultados por Objetivo<br>
+        3. Para cada Resultado: 3 Indicadores SMART + 2-5 Atividades<br>
+        4. Tudo pronto em um arquivo Excel profissional!
+      </div>
+
+      <!-- BOTÕES -->
       <div style="text-align:center;margin-top:30px">
-        <button type="submit" id="submitBtn">➡️ Próxima Etapa - Escolher Resultados</button>
+        <button type="submit" id="submitBtn">🚀 Gerar Marco Lógico</button>
         <p id="status" class="status" role="status" aria-live="polite"></p>
       </div>
 
@@ -158,77 +123,144 @@
   <footer>© Humana Povo para Povo Brasil | Marco Lógico</footer>
 
   <script>
-    // Recuperar dados da ficha anterior (simulado - em produção viria da URL ou sessionStorage)
-    const fichaData = JSON.parse(sessionStorage.getItem('fichaData') || '{"project_name":"Projeto Exemplo","project_summary":"Resumo do projeto"}');
-    
-    document.getElementById('projectNameDisplay').textContent = fichaData.project_name || 'Não informado';
-    document.getElementById('projectSummaryDisplay').textContent = fichaData.project_summary?.substring(0, 100) + '...' || 'Não informado';
-
     const form = document.getElementById('marcoForm');
-    const statusEl = document.getElementById('status');
     const numObjetivosSelect = document.getElementById('numObjetivos');
-    const resultadosPorObjetivoSelect = document.getElementById('resultadosPorObjetivo');
-    const estimativaText = document.getElementById('estimativaText');
+    const objetivosSection = document.getElementById('objetivosSection');
+    const objetivosContainer = document.getElementById('objetivosContainer');
+    const contadorOE = document.getElementById('contadorOE');
+    const statusEl = document.getElementById('status');
 
-    // Atualizar estimativa de atividades automaticamente
-    function atualizarEstimativa() {
-      const numObjetivos = parseInt(numObjetivosSelect.value) || 0;
-      const resultadosPorObjetivo = parseInt(resultadosPorObjetivoSelect.value) || 0;
+    // Quando mudar número de objetivos, gerar campos de entrada
+    numObjetivosSelect.addEventListener('change', (e) => {
+      const numObjetivos = parseInt(e.target.value) || 0;
       
-      if (numObjetivos > 0 && resultadosPorObjetivo > 0) {
-        const totalResultados = numObjetivos * resultadosPorObjetivo;
-        const estimativaAtividades = Math.ceil(totalResultados * 2.5); // ~2-3 atividades por resultado
+      if (numObjetivos > 0) {
+        objetivosSection.classList.add('ativa');
+        contadorOE.textContent = numObjetivos;
+        renderizarCamposObjetivos(numObjetivos);
+      } else {
+        objetivosSection.classList.remove('ativa');
+        objetivosContainer.innerHTML = '';
+      }
+    });
+
+    function renderizarCamposObjetivos(num) {
+      objetivosContainer.innerHTML = '';
+      
+      for (let i = 1; i <= num; i++) {
+        const div = document.createElement('div');
+        div.className = 'objetivo-input-group';
         
-        estimativaText.innerHTML = `
-          <strong>Estrutura estimada:</strong><br>
-          • ${numObjetivos} Objetivos Específicos<br>
-          • ${totalResultados} Resultados (${resultadosPorObjetivo} por objetivo)<br>
-          • ~${estimativaAtividades} Atividades (2-3 por resultado)<br>
-          <br>
-          <strong>Tempo de processamento estimado: ~2-3 minutos</strong>
+        div.innerHTML = `
+          <h4>Objetivo Específico ${i}</h4>
+          <input 
+            type="text" 
+            name="oe_titulo_${i}" 
+            placeholder="Título do objetivo (ex: Fortalecer Capacidades Comunitárias)"
+            required
+          >
+          <textarea 
+            name="oe_descricao_${i}" 
+            placeholder="Descrição breve do que será alcançado com este objetivo"
+            required
+          ></textarea>
         `;
+        
+        objetivosContainer.appendChild(div);
       }
     }
 
-    numObjetivosSelect.addEventListener('change', atualizarEstimativa);
-    resultadosPorObjetivoSelect.addEventListener('change', atualizarEstimativa);
-
+    // Enviar formulário DIRETO para Claude via webhook
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const submitBtn = document.getElementById('submitBtn');
       submitBtn.disabled = true;
-      submitBtn.textContent = '⏳ Preparando...';
+      submitBtn.innerHTML = '<span>⏳ Gerando Marco Lógico...</span><div class="loading-spinner"></div>';
       statusEl.textContent = '';
       statusEl.classList.remove('error', 'success');
 
       try {
         const objetivoGeral = form.objetivo_geral.value.trim();
         const numObjetivos = parseInt(form.num_objetivos.value);
-        const resultadosPorObjetivo = parseInt(form.resultados_por_objetivo.value);
         const contexto = form.contexto.value.trim();
 
-        if (!objetivoGeral || !numObjetivos || !resultadosPorObjetivo || !contexto) {
-          throw new Error('Por favor, preencha todos os campos obrigatórios');
+        if (!objetivoGeral || !numObjetivos) {
+          throw new Error('Por favor, preencha o Objetivo Geral e selecione o número de objetivos');
         }
 
-        // Armazenar dados para próxima etapa
-        const marcoData = {
+        // Coletar Objetivos Específicos preenchidos
+        const objetivosEspecificos = [];
+        for (let i = 1; i <= numObjetivos; i++) {
+          const titulo = form[`oe_titulo_${i}`].value.trim();
+          const descricao = form[`oe_descricao_${i}`].value.trim();
+          
+          if (!titulo || !descricao) {
+            throw new Error(`Por favor, preencha o Objetivo Específico ${i}`);
+          }
+
+          objetivosEspecificos.push({
+            numero: i,
+            titulo: titulo,
+            descricao: descricao
+          });
+        }
+
+        // Preparar dados para enviar direto para Claude
+        const payload = {
           objetivo_geral: objetivoGeral,
           num_objetivos: numObjetivos,
-          resultados_por_objetivo: resultadosPorObjetivo,
-          contexto: contexto,
-          ficha: fichaData
+          objetivos_especificos: objetivosEspecificos,
+          contexto: contexto
         };
 
-        sessionStorage.setItem('marcoData', JSON.stringify(marcoData));
+        console.log('📤 Enviando para Claude via Webhook:', payload);
 
-        statusEl.textContent = '✅ Dados salvos! Redirecionando...';
+        // WEBHOOK URL - APONTA DIRETO PARA CLAUDE
+        // Configurar em Make.com: Webhook → Claude
+        const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
+
+        statusEl.textContent = '⏳ Processando com IA (pode levar 2-3 minutos)...';
         statusEl.classList.add('success');
 
-        // Redirecionar para próxima tela (tela 2)
+        const response = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erro na comunicação: ${response.status}`);
+        }
+
+        let responseText = await response.text();
+        console.log('📥 Resposta recebida');
+
+        // Parse JSON (limpar markdown se necessário)
+        let marcoLogico;
+        try {
+          marcoLogico = JSON.parse(responseText);
+        } catch (e) {
+          let cleanJson = responseText
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .trim();
+          marcoLogico = JSON.parse(cleanJson);
+        }
+
+        console.log('✅ Marco Lógico gerado:', marcoLogico);
+
+        // Salvar em sessionStorage
+        sessionStorage.setItem('marcoLogico', JSON.stringify(marcoLogico));
+        sessionStorage.setItem('marcoData', JSON.stringify(payload));
+
+        statusEl.textContent = '✅ Marco Lógico gerado! Redirecionando...';
+        statusEl.classList.remove('success');
+        statusEl.classList.add('success');
+
+        // Redirecionar para visualização
         setTimeout(() => {
-          window.location.href = 'marco-logico-tela2.html';
+          window.location.href = 'marco-logico-simples-tela-resultado.html';
         }, 1500);
 
       } catch (err) {
@@ -237,9 +269,10 @@
         statusEl.classList.add('error');
       } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = '➡️ Próxima Etapa - Escolher Resultados';
+        submitBtn.innerHTML = '🚀 Gerar Marco Lógico';
       }
     });
+
   </script>
 
 </body>
