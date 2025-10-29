@@ -91,49 +91,42 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // Limpar quebras de linha dentro de strings JSON
+    // Limpar e corrigir JSON quebrado
     function cleanJSONString(txt){
       txt=String(txt||'');
       // Remove markdown
       txt=txt.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
       
-      // Substitui quebras de linha por espaço DENTRO de strings
-      // Isso é um pouco arriscado, mas funciona para a maioria dos casos
-      let result='';
-      let inString=false;
-      let escapeNext=false;
+      // Remove caracteres de controle problemáticos
+      txt=txt.replace(/[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]/g,' ');
       
-      for(let i=0;i<txt.length;i++){
-        const ch=txt[i];
-        
-        if(escapeNext){
-          result+=ch;
-          escapeNext=false;
-          continue;
+      // Substitui quebras de linha e tabs por espaço
+      txt=txt.replace(/[\r\n\t]+/g,' ');
+      
+      // Corrige aspas duplas não-escapadas dentro de strings (exceto no início/fim)
+      // Procura por: "...conteúdo"palavra"mais..." e substitui a aspa do meio
+      txt=txt.replace(/"([^"]*?)([^\\])"([^"]*?)"/g,function(match,p1,p2,p3){
+        // Se tem aspa não-escapada no meio, escapa
+        const fixed=p1+(p2==='"'? p2 : p2)+p3;
+        return '"'+fixed.replace(/(?<!\\)"/g,'\\"')+'"';
+      });
+      
+      return txt;
+    }
+    
+    // Extrai a primeira chave JSON válida
+    function extractFirstJSON(txt){
+      const start=txt.indexOf('{');
+      if(start<0) return null;
+      let depth=0;
+      for(let i=start;i<txt.length;i++){
+        if(txt[i]==='{') depth++;
+        if(txt[i]==='}') {
+          depth--;
+          if(depth===0) return txt.slice(start, i+1);
         }
-        
-        if(ch==='\\'){
-          result+=ch;
-          escapeNext=true;
-          continue;
-        }
-        
-        if(ch==='"' && !escapeNext){
-          inString=!inString;
-          result+=ch;
-          continue;
-        }
-        
-        // Se está dentro de string e é quebra de linha, substitui por espaço
-        if(inString && (ch==='\n' || ch==='\r')){
-          result+=' ';
-          continue;
-        }
-        
-        result+=ch;
       }
-      
-      return result;
+      return null;
     }
 
     // Parser simples - a resposta agora vem em JSON puro
@@ -142,10 +135,19 @@
       try{
         // Se já é string, tenta parsear direto
         if(typeof raw==='string'){
-          const txt=cleanJSONString(raw);
-          console.log('Raw response cleaned:', txt.substring(0, 500));
+          console.log('Raw response (primeiros 500 chars):', raw.substring(0, 500));
           
-          const obj=JSON.parse(txt);
+          // Tenta limpar
+          let txt=cleanJSONString(raw);
+          console.log('After clean (primeiros 500 chars):', txt.substring(0, 500));
+          
+          // Tenta extrair o primeiro JSON válido
+          const jsonStr=extractFirstJSON(txt);
+          if(!jsonStr) throw new Error('Nenhum JSON encontrado');
+          
+          console.log('Extracted JSON (primeiros 500 chars):', jsonStr.substring(0, 500));
+          
+          const obj=JSON.parse(jsonStr);
           
           console.log('Parsed object keys:', Object.keys(obj));
           
@@ -166,7 +168,7 @@
         }
         throw new Error('Formato desconhecido');
       }catch(e){
-        console.error('Erro ao fazer parse:',e,'Raw:',raw);
+        console.error('Erro completo:',e,'Raw:',raw);
         throw new Error('JSON inválido: '+e.message);
       }
     }
