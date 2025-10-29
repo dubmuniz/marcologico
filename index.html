@@ -91,21 +91,79 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
+    // Limpar quebras de linha dentro de strings JSON
+    function cleanJSONString(txt){
+      txt=String(txt||'');
+      // Remove markdown
+      txt=txt.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+      
+      // Substitui quebras de linha por espaço DENTRO de strings
+      // Isso é um pouco arriscado, mas funciona para a maioria dos casos
+      let result='';
+      let inString=false;
+      let escapeNext=false;
+      
+      for(let i=0;i<txt.length;i++){
+        const ch=txt[i];
+        
+        if(escapeNext){
+          result+=ch;
+          escapeNext=false;
+          continue;
+        }
+        
+        if(ch==='\\'){
+          result+=ch;
+          escapeNext=true;
+          continue;
+        }
+        
+        if(ch==='"' && !escapeNext){
+          inString=!inString;
+          result+=ch;
+          continue;
+        }
+        
+        // Se está dentro de string e é quebra de linha, substitui por espaço
+        if(inString && (ch==='\n' || ch==='\r')){
+          result+=' ';
+          continue;
+        }
+        
+        result+=ch;
+      }
+      
+      return result;
+    }
+
     // Parser simples - a resposta agora vem em JSON puro
     function extractMarcoLogico(raw){
       if(!raw) throw new Error('Resposta vazia');
       try{
         // Se já é string, tenta parsear direto
         if(typeof raw==='string'){
-          const txt=raw.trim();
-          // Remove markdown se houver
-          let clean=txt.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-          const obj=JSON.parse(clean);
+          const txt=cleanJSONString(raw);
+          console.log('Raw response cleaned:', txt.substring(0, 500));
+          
+          const obj=JSON.parse(txt);
+          
+          console.log('Parsed object keys:', Object.keys(obj));
+          
+          // Se veio com marco_logico, retorna
           if(obj.marco_logico) return obj;
-          throw new Error('JSON sem marco_logico');
+          
+          // Se veio direto (sem wrapper), envolve
+          if(obj.objetivo_geral && obj.objetivos_especificos){
+            return {marco_logico: obj};
+          }
+          
+          throw new Error('JSON sem estrutura esperada. Keys: '+Object.keys(obj).join(', '));
         }
         // Se já é objeto
         if(raw.marco_logico) return raw;
+        if(raw.objetivo_geral && raw.objetivos_especificos){
+          return {marco_logico: raw};
+        }
         throw new Error('Formato desconhecido');
       }catch(e){
         console.error('Erro ao fazer parse:',e,'Raw:',raw);
@@ -230,4 +288,3 @@
   </script>
 </body>
 </html>
-
