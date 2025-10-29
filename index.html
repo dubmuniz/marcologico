@@ -86,7 +86,6 @@
     const submitBtn = document.getElementById('submitBtn');
     let editalConteudo = '';
 
-    // Sanitize e compactação
     function sanitizeJSONText(s){return String(s??'').replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\r?\n/g,' ');}
     function sanitizeOE(arr){return arr.map(x=>({numero:x.numero,titulo:sanitizeJSONText(x.titulo),descricao:sanitizeJSONText(x.descricao)}));}
     function objetivosToOneLine(arr){
@@ -94,9 +93,13 @@
       const clean=s=>String(s??'').replace(/[\r\n]+/g,' ').replace(/"/g,'\\"').trim();
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
+    function isValidMarco(obj){
+      return obj && obj.marco_logico && Array.isArray(obj.marco_logico.objetivos_especificos);
+    }
 
     async function lerPDF(file){
       const buf=await file.arrayBuffer();
+      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const pdf=await pdfjsLib.getDocument({data:buf}).promise;
       let txt='';
       for(let i=1;i<=pdf.numPages;i++){
@@ -115,7 +118,7 @@
     editalInput.addEventListener('change',async e=>{
       const f=e.target.files[0];
       if(!f)return;
-      statusEl.textContent='Lendo arquivo...';
+      statusEl.textContent='Lendo arquivo...'; statusEl.classList.remove('error','success');
       try{
         if(f.name.endsWith('.txt'))editalConteudo=await f.text();
         else if(f.name.endsWith('.pdf'))editalConteudo=await lerPDF(f);
@@ -140,7 +143,9 @@
           <textarea name="oe_descricao_${i}" placeholder="Descrição do objetivo ${i}" required></textarea>`;
           objetivosContainer.appendChild(div);
         }
-      }else objetivosSection.classList.remove('ativa');
+      }else{
+        objetivosSection.classList.remove('ativa');
+      }
     });
 
     form.addEventListener('submit',async e=>{
@@ -149,12 +154,13 @@
       const descricaoProposta=document.getElementById('descricaoProposta').value.trim();
       const num=parseInt(document.getElementById('numObjetivos').value);
       if(!editalConteudo||!nomeProjeto||!descricaoProposta||!num){
-        statusEl.textContent='Preencha todos os campos.';statusEl.classList.add('error');return;
+        statusEl.textContent='Preencha todos os campos.'; statusEl.classList.add('error'); return;
       }
       const objetivosEspecificos=[];
       for(let i=1;i<=num;i++){
         const titulo=form[`oe_titulo_${i}`].value.trim();
         const descricao=form[`oe_descricao_${i}`].value.trim();
+        if(!titulo||!descricao){statusEl.textContent=`Preencha o Objetivo ${i}`; statusEl.classList.add('error'); return;}
         objetivosEspecificos.push({numero:i,titulo,descricao});
       }
       const objetivosEspecificosTexto=objetivosToOneLine(objetivosEspecificos);
@@ -165,19 +171,108 @@
         objetivosEspecificos,
         objetivosEspecificosTexto
       };
+
       try{
         submitBtn.disabled=true;
-        statusEl.textContent='Enviando para IA...';
+        statusEl.textContent='Enviando para IA...'; statusEl.classList.remove('error','success');
+
         const r=await fetch('https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm',{
-          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(safe)
         });
-        if(!r.ok)throw new Error('Erro HTTP '+r.status);
-        const txt=await r.text();
-        console.log(txt);
-        statusEl.textContent='✅ Resposta recebida';
-      }catch(err){statusEl.textContent='❌ '+err.message;}
-      finally{submitBtn.disabled=false;}
+        if(!r.ok) throw new Error('Erro HTTP '+r.status);
+        let responseText=await r.text();
+        let marcoLogico;
+        try{
+          marcoLogico=JSON.parse(responseText);
+        }catch{
+          const clean=responseText.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+          marcoLogico=JSON.parse(clean);
+        }
+
+        if(!isValidMarco(marcoLogico)){ throw new Error('Resposta da IA sem chave marco_logico válida'); }
+
+        statusEl.textContent='✅ Marco Lógico gerado, preparando XLSX...'; statusEl.classList.add('success');
+        gerarXLSX(marcoLogico, nomeProjeto);
+
+      }catch(err){
+        console.error(err);
+        statusEl.textContent='❌ '+err.message; statusEl.classList.add('error');
+      }finally{
+        submitBtn.disabled=false;
+      }
     });
+
+    function gerarXLSX(marco, nomeProjeto){
+      const url='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      const script=document.createElement('script');
+      script.src=url;
+      script.async=true;
+
+      script.onerror=()=>{ statusEl.textContent='❌ Falha ao carregar biblioteca XLSX'; statusEl.classList.add('error'); };
+
+      script.onload=()=>{
+        try{
+          const wb=XLSX.utils.book_new();
+
+          // Aba Resumo
+          const objetivos=marco.marco_logico?.objetivos_especificos||[];
+          const totalResultados=objetivos.reduce((a,oe)=>a+(oe.resultados?.length||0),0);
+          const totalIndicadores=objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.indicadores?.length||0),0),0);
+          const totalAtividades=objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.atividades?.length||0),0),0);
+
+          const resumo=[
+            ['PROJETO', nomeProjeto],
+            ['OBJETIVO GERAL', marco.marco_logico?.objetivo_geral||''],
+            ['DATA GERAÇÃO', new Date().toLocaleDateString('pt-BR')],
+            [''],
+            ['ESTATÍSTICAS'],
+            ['Objetivos Específicos', objetivos.length],
+            ['Resultados', totalResultados],
+            ['Indicadores', totalIndicadores],
+            ['Atividades', totalAtividades]
+          ];
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumo), 'Resumo');
+
+          // Aba Marco Lógico
+          const rows=[['OE','RESULTADO','INDICADOR','META','ATIVIDADE','LÓGICA','PRAZO','VERIFICAÇÃO']];
+          objetivos.forEach(oe=>{
+            const resultados=oe.resultados||[];
+            if(resultados.length===0){
+              rows.push([oe.titulo||'', '', '', '', '', '', '', '']);
+            }else{
+              resultados.forEach(r=>{
+                const inds=r.indicadores||[];
+                const atvs=r.atividades||[];
+                const n=Math.max(inds.length, atvs.length, 1);
+                for(let i=0;i<n;i++){
+                  const ind=inds[i]||{};
+                  const atv=atvs[i]||{};
+                  rows.push([
+                    oe.titulo||'',
+                    r.titulo||'',
+                    ind.texto||'',
+                    ind.meta||'',
+                    atv.descricao||'',
+                    atv.logica_intervencao||'',
+                    atv.prazo||'',
+                    atv.meios_verificacao||''
+                  ]);
+                }
+              });
+            }
+          });
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Marco Lógico');
+
+          const filename=`Marco_Logico_${String(nomeProjeto).replace(/\s+/g,'_')}.xlsx`;
+          XLSX.writeFile(wb, filename, {compression:true});
+          statusEl.textContent='✅ XLSX gerado e baixado'; statusEl.classList.add('success');
+        }catch(err){
+          console.error(err);
+          statusEl.textContent='❌ Erro ao gerar XLSX: '+err.message; statusEl.classList.add('error');
+        }
+      };
+      document.head.appendChild(script);
+    }
   </script>
 </body>
 </html>
