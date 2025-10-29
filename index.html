@@ -116,14 +116,40 @@
     
     // Extrai a primeira chave JSON válida
     function extractFirstJSON(txt){
+      // Procura o primeiro { na string
       const start=txt.indexOf('{');
       if(start<0) return null;
+      
       let depth=0;
+      let inString=false;
+      let escape=false;
+      
       for(let i=start;i<txt.length;i++){
-        if(txt[i]==='{') depth++;
-        if(txt[i]==='}') {
-          depth--;
-          if(depth===0) return txt.slice(start, i+1);
+        const ch=txt[i];
+        
+        // Controla escape
+        if(escape){
+          escape=false;
+          continue;
+        }
+        if(ch==='\\'){
+          escape=true;
+          continue;
+        }
+        
+        // Controla string
+        if(ch==='"'){
+          inString=!inString;
+          continue;
+        }
+        
+        // Se não está em string, conta chaves
+        if(!inString){
+          if(ch==='{') depth++;
+          if(ch==='}'){
+            depth--;
+            if(depth===0) return txt.slice(start, i+1);
+          }
         }
       }
       return null;
@@ -238,7 +264,14 @@
         });
         if(!r.ok) throw new Error('Erro HTTP '+r.status);
         const txt=await r.text();
-        console.log('Resposta bruta:',txt);
+        
+        console.log('=== RESPOSTA BRUTA ===');
+        console.log('Tamanho:', txt.length);
+        console.log('Primeiros 1000 chars:', txt.substring(0, 1000));
+        console.log('Últimos 500 chars:', txt.substring(Math.max(0, txt.length-500)));
+        console.log('Contém {:', txt.includes('{'));
+        console.log('Contém marco_logico:', txt.includes('marco_logico'));
+        console.log('=== FIM ===');
         
         const marcoLogico=extractMarcoLogico(txt);
 
@@ -287,6 +320,9 @@
       script.onerror=()=>{statusEl.textContent='❌ Falha ao carregar XLSX';statusEl.classList.add('error');};
       document.head.appendChild(script);
     }
+  </script>
+</body>
+</html>
   </script>
 </body>
 </html>
