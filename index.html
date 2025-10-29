@@ -91,55 +91,26 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // Parser tolerante para respostas da IA
-    function tryParseJSON(txt){try{return JSON.parse(txt);}catch(_){return null;}}
-    function fixCommonJSONIssues(s){
-      let t=String(s||'');
-      t=t.replace(/\uFEFF/g,'').replace(/\r?\n/g,' ').replace(/\t/g,' ');
-      t=t.replace(/```json|```/g,'').trim();
-      t=t.replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
-      // remove vírgulas finais antes de ] ou }
-      t=t.replace(/,\s*([}\]])/g,'$1');
-      // se vier com aspas simples em strings, tenta converter com cautela
-      if(!tryParseJSON(t) && t.includes("'")){
-        // troca aspas simples por duplas quando estiverem em contextos de string
-        t=t.replace(/'([^'\\]*(\\.[^'\\]*)*)'/g,'"${1}"');
-      }
-      return t;
-    }
-    function sliceFromMarcoLogico(s){
-      const i=s.indexOf('{"marco_logico"');
-      if(i<0) return null;
-      let depth=0,end=-1;
-      for(let k=i;k<s.length;k++){
-        const ch=s[k];
-        if(ch==='{') depth++;
-        else if(ch==='}'){ depth--; if(depth===0){ end=k; break; } }
-      }
-      return end>i ? s.slice(i,end+1) : null;
-    }
+    // Parser simples - a resposta agora vem em JSON puro
     function extractMarcoLogico(raw){
-      if(!raw) throw new Error('vazio');
-      if(typeof raw!=='string'){ if(raw.marco_logico) return raw; const j=JSON.stringify(raw); raw=j; }
-      let t=fixCommonJSONIssues(raw);
-      let obj=tryParseJSON(t);
-      if(obj && obj.marco_logico) return obj;
-      const slice=sliceFromMarcoLogico(t);
-      if(slice){
-        const fixed=fixCommonJSONIssues(slice);
-        obj=tryParseJSON(fixed);
-        if(obj && obj.marco_logico) return obj;
+      if(!raw) throw new Error('Resposta vazia');
+      try{
+        // Se já é string, tenta parsear direto
+        if(typeof raw==='string'){
+          const txt=raw.trim();
+          // Remove markdown se houver
+          let clean=txt.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+          const obj=JSON.parse(clean);
+          if(obj.marco_logico) return obj;
+          throw new Error('JSON sem marco_logico');
+        }
+        // Se já é objeto
+        if(raw.marco_logico) return raw;
+        throw new Error('Formato desconhecido');
+      }catch(e){
+        console.error('Erro ao fazer parse:',e,'Raw:',raw);
+        throw new Error('JSON inválido: '+e.message);
       }
-      // último recurso: procura chaves conhecidas e monta casca mínima
-      const og = /"objetivo_geral"\s*:\s*"([^"]+)"/.exec(t);
-      const oes = /"objetivos_especificos"\s*:\s*(\[[\s\S]*\])/.exec(t);
-      if(og && oes){
-        const casca = `{"marco_logico":{"objetivo_geral":"${og[1]}","objetivos_especificos":${oes[1]}}}`;
-        const fixed=fixCommonJSONIssues(casca);
-        obj=tryParseJSON(fixed);
-        if(obj && obj.marco_logico) return obj;
-      }
-      throw new Error('sem JSON válido');
     }
 
     async function lerPDF(file){
@@ -207,6 +178,8 @@
         });
         if(!r.ok) throw new Error('Erro HTTP '+r.status);
         const txt=await r.text();
+        console.log('Resposta bruta:',txt);
+        
         const marcoLogico=extractMarcoLogico(txt);
 
         statusEl.textContent='✅ Marco Lógico gerado, preparando XLSX...'; statusEl.classList.add('success');
