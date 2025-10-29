@@ -10,7 +10,6 @@
   <style>
     :root{--green:#1E7E34;--accent:#FFC857;--ink:#1b1b1b;--bg:#fafafa;--muted:#667085}
     *{box-sizing:border-box}
-    html,body{height:100%}
     body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui}
     .wrap{max-width:900px;margin:0 auto;padding:20px}
     header{text-align:center;padding:28px 0 40px}
@@ -18,36 +17,21 @@
     .lead{color:var(--muted);margin:0}
     form{background:#fff;border:1px solid #eee;border-radius:12px;padding:30px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
     .form-section{margin-bottom:32px}
-    .form-section h2{font-size:18px;font-weight:600;margin:0 0 20px;color:var(--ink);border-bottom:2px solid var(--green);padding-bottom:10px}
     label{display:block;margin:16px 0 6px;font-weight:600;color:var(--ink)}
-    input[type="text"],textarea,input[type="file"],select{width:100%;margin-top:6px;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit;line-height:1.5}
-    input[type="file"]{padding:8px}
+    input,textarea,select{width:100%;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit}
     textarea{resize:vertical;min-height:100px}
-    .note{font-size:12px;color:#80888c;margin-top:6px}
     .file-info{background:#f0f7f4;border-left:4px solid var(--green);padding:12px;border-radius:6px;margin:12px 0;font-size:13px}
-    button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 24px;font-weight:600;cursor:pointer;transition:all 0.2s;font-size:16px;width:100%}
-    button:hover:not(:disabled){filter:brightness(1.05)}
+    button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 24px;font-weight:600;cursor:pointer;font-size:16px;width:100%}
     button:disabled{opacity:0.6;cursor:not-allowed}
     .status{min-height:22px;color:var(--muted);margin:16px 0 0;font-size:14px}
-    .status.error{color:#d32f2f}
-    .status.success{color:var(--green)}
-    .loading-spinner{display:inline-block;width:16px;height:16px;border:2px solid #e3e8ee;border-top:2px solid var(--green);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:8px}
-    @keyframes spin{0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)}}
+    .status.error{color:#d32f2f}.status.success{color:var(--green)}
     .objetivos-section{display:none;margin-top:30px}
     .objetivos-section.ativa{display:block}
     .objetivo-input-group{background:#f9f9f9;border:1px solid #e3e8ee;border-radius:8px;padding:16px;margin:12px 0}
-    .objetivo-input-group h4{margin:0 0 12px;color:var(--green);font-size:14px}
-    .objetivo-input-group input{margin-bottom:12px}
-    .objetivo-input-group textarea{min-height:80px;margin-bottom:12px}
-    .objetivo-input-group label{margin:0}
-    .contador{display:inline-block;background:var(--accent);color:#111;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:8px}
   </style>
 </head>
 <body>
   <header class="wrap">
-    <div class="brand">
-      <img src="./Humana Logo.png" alt="Humana Logo" class="logo" style="width:100px;height:auto;margin-bottom:20px">
-    </div>
     <h1>🎯 Marco Lógico</h1>
     <p class="lead">Gere marcos lógicos automaticamente com IA a partir do edital</p>
   </header>
@@ -55,52 +39,38 @@
   <main class="wrap">
     <form id="marcoForm" novalidate>
       <div class="form-section">
-        <h2>📄 Edital da Chamada</h2>
-        <label>Upload do Edital (PDF, DOCX ou TXT) *
+        <h2>📄 Edital</h2>
+        <label>Upload (PDF, DOCX, TXT)
           <input type="file" id="edital" accept=".pdf,.docx,.txt" required>
-          <div class="note">Aceita PDF, DOCX ou TXT (máximo 10MB)</div>
         </label>
         <div id="editalInfo" class="file-info" style="display:none"></div>
       </div>
 
       <div class="form-section">
         <h2>🏷️ Projeto</h2>
-        <label>Nome do Projeto *
-          <input type="text" id="nomeProjeto" placeholder="Ex: Turismo Regenerativo na Ilha do Bananal" required>
-        </label>
+        <input type="text" id="nomeProjeto" placeholder="Nome do projeto" required>
       </div>
 
       <div class="form-section">
         <h2>✍️ Descrição da Proposta</h2>
-        <label>O que seu projeto faz? *
-          <textarea id="descricaoProposta" placeholder="Descreva brevemente a proposta" required></textarea>
-          <div class="note">A IA usará o edital + proposta para gerar o marco lógico</div>
-        </label>
+        <textarea id="descricaoProposta" placeholder="Descreva brevemente a proposta" required></textarea>
       </div>
 
       <div class="form-section">
-        <h2>📊 Estrutura do Marco</h2>
-        <label>Quantos Objetivos Específicos? *
-          <select id="numObjetivos" required>
-            <option value="">Selecione...</option>
-            <option value="2">2 objetivos</option>
-            <option value="3">3 objetivos</option>
-            <option value="4">4 objetivos</option>
-            <option value="5">5 objetivos</option>
-          </select>
-        </label>
+        <h2>📊 Estrutura</h2>
+        <select id="numObjetivos" required>
+          <option value="">Número de objetivos...</option>
+          <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+        </select>
       </div>
 
       <div class="form-section objetivos-section" id="objetivosSection">
-        <h2>📌 Objetivos Específicos <span class="contador" id="contadorOE">0</span></h2>
-        <p style="color:var(--muted);font-size:13px">A IA gerará resultados, indicadores e atividades para cada objetivo.</p>
+        <h2>📌 Objetivos Específicos</h2>
         <div id="objetivosContainer"></div>
       </div>
 
-      <div style="text-align:center;margin-top:30px">
-        <button type="submit" id="submitBtn">🚀 Gerar Marco Lógico</button>
-        <p id="status" class="status" role="status" aria-live="polite"></p>
-      </div>
+      <button type="submit" id="submitBtn">🚀 Gerar Marco Lógico</button>
+      <p id="status" class="status"></p>
     </form>
   </main>
 
@@ -110,226 +80,104 @@
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
     const editalInfo = document.getElementById('editalInfo');
-    const numObjetivosSelect = document.getElementById('numObjetivos');
     const objetivosSection = document.getElementById('objetivosSection');
     const objetivosContainer = document.getElementById('objetivosContainer');
-    const contadorOE = document.getElementById('contadorOE');
     const statusEl = document.getElementById('status');
     const submitBtn = document.getElementById('submitBtn');
-
     let editalConteudo = '';
 
-    // Sanitização para evitar quebra de JSON no Make/Claude
-    function sanitizeJSONText(s){
-      if(typeof s !== 'string') s = String(s ?? '');
-      return s.replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\r?\n/g,' ');
-    }
-    function sanitizeOE(arr){
-      if(!Array.isArray(arr)) return [];
-      return arr.map(x=>({
-        numero: x.numero ?? null,
-        titulo: sanitizeJSONText(x.titulo ?? ''),
-        descricao: sanitizeJSONText(x.descricao ?? '')
-      }));
-    }
-    function buildSafePayload(edital, nomeProjeto, descricaoProposta, objetivosEspecificos){
-      return {
-        edital: sanitizeJSONText(edital),
-        nomeProjeto: sanitizeJSONText(nomeProjeto),
-        descricaoProposta: sanitizeJSONText(descricaoProposta),
-        objetivosEspecificos: sanitizeOE(objetivosEspecificos)
-      };
+    // Sanitize e compactação
+    function sanitizeJSONText(s){return String(s??'').replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\r?\n/g,' ');}
+    function sanitizeOE(arr){return arr.map(x=>({numero:x.numero,titulo:sanitizeJSONText(x.titulo),descricao:sanitizeJSONText(x.descricao)}));}
+    function objetivosToOneLine(arr){
+      if(!Array.isArray(arr))return '';
+      const clean=s=>String(s??'').replace(/[\r\n]+/g,' ').replace(/"/g,'\\"').trim();
+      return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // Ler PDF
-    async function lerPDF(file) {
-      const arrayBuffer = await file.arrayBuffer();
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-      let texto = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        texto += content.items.map(item => item.str).join(' ') + '\n';
+    async function lerPDF(file){
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      let txt='';
+      for(let i=1;i<=pdf.numPages;i++){
+        const pg=await pdf.getPage(i);
+        const c=await pg.getTextContent();
+        txt+=c.items.map(it=>it.str).join(' ')+' ';
       }
-      return texto;
+      return txt;
     }
-    // Ler DOCX
-    async function lerDOCX(file) {
-      const arrayBuffer = await file.arrayBuffer();
-      const result = await mammoth.extractRawText({arrayBuffer});
-      return result.value;
+    async function lerDOCX(file){
+      const buf=await file.arrayBuffer();
+      const r=await mammoth.extractRawText({arrayBuffer:buf});
+      return r.value;
     }
 
-    // Ao selecionar arquivo
-    editalInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      statusEl.textContent = '📖 Lendo arquivo...';
-      statusEl.classList.remove('error','success');
-      try {
-        if (file.name.endsWith('.txt') || file.type === 'text/plain') {
-          editalConteudo = await file.text();
-        } else if (file.name.endsWith('.pdf') || file.type === 'application/pdf') {
-          editalConteudo = await lerPDF(file);
-        } else if (file.name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-          editalConteudo = await lerDOCX(file);
-        } else {
-          throw new Error('Formato não suportado. Use PDF, DOCX ou TXT');
-        }
-        editalInfo.innerHTML = `✓ ${file.name} (${(editalConteudo.length/1024).toFixed(2)}KB) carregado`;
-        editalInfo.style.display = 'block';
-        statusEl.textContent = '';
-      } catch (err) {
-        statusEl.textContent = `❌ Erro ao ler arquivo: ${err.message}`;
-        statusEl.classList.add('error');
-        editalInput.value = '';
-      }
+    editalInput.addEventListener('change',async e=>{
+      const f=e.target.files[0];
+      if(!f)return;
+      statusEl.textContent='Lendo arquivo...';
+      try{
+        if(f.name.endsWith('.txt'))editalConteudo=await f.text();
+        else if(f.name.endsWith('.pdf'))editalConteudo=await lerPDF(f);
+        else if(f.name.endsWith('.docx'))editalConteudo=await lerDOCX(f);
+        else throw new Error('Formato não suportado');
+        editalInfo.style.display='block';
+        editalInfo.textContent=`${f.name} carregado (${(editalConteudo.length/1024).toFixed(1)} KB)`;
+        statusEl.textContent='';
+      }catch(err){statusEl.textContent='Erro: '+err.message;statusEl.classList.add('error');}
     });
 
-    // Renderizar campos
-    numObjetivosSelect.addEventListener('change', (e) => {
-      const num = parseInt(e.target.value) || 0;
-      if (num > 0) {
+    document.getElementById('numObjetivos').addEventListener('change',e=>{
+      const n=parseInt(e.target.value)||0;
+      objetivosContainer.innerHTML='';
+      if(n>0){
         objetivosSection.classList.add('ativa');
-        contadorOE.textContent = num;
-        objetivosContainer.innerHTML = '';
-        for (let i = 1; i <= num; i++) {
-          const div = document.createElement('div');
-          div.className = 'objetivo-input-group';
-          div.innerHTML = `
-            <h4>Objetivo Específico ${i}</h4>
-            <label style="margin:0 0 12px 0;font-weight:600;display:block">
-              Título do Objetivo *
-              <input type="text" name="oe_titulo_${i}" placeholder="Ex: Fortalecer Capacidades Comunitárias" required>
-            </label>
-            <label style="margin:0;font-weight:600;display:block">
-              Descrição do Objetivo *
-              <textarea name="oe_descricao_${i}" placeholder="O que será alcançado com este objetivo específico" required></textarea>
-            </label>`;
+        for(let i=1;i<=n;i++){
+          const div=document.createElement('div');
+          div.className='objetivo-input-group';
+          div.innerHTML=`<h4>Objetivo ${i}</h4>
+          <input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required>
+          <textarea name="oe_descricao_${i}" placeholder="Descrição do objetivo ${i}" required></textarea>`;
           objetivosContainer.appendChild(div);
         }
-      } else {
-        objetivosSection.classList.remove('ativa');
-        objetivosContainer.innerHTML = '';
-        contadorOE.textContent = '0';
-      }
+      }else objetivosSection.classList.remove('ativa');
     });
 
-    // Submit
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit',async e=>{
       e.preventDefault();
-      if (!editalConteudo) {
-        statusEl.textContent = '❌ Por favor, carregue um arquivo de edital';
-        statusEl.classList.add('error');
-        return;
+      const nomeProjeto=document.getElementById('nomeProjeto').value.trim();
+      const descricaoProposta=document.getElementById('descricaoProposta').value.trim();
+      const num=parseInt(document.getElementById('numObjetivos').value);
+      if(!editalConteudo||!nomeProjeto||!descricaoProposta||!num){
+        statusEl.textContent='Preencha todos os campos.';statusEl.classList.add('error');return;
       }
-      const nomeProjeto = document.getElementById('nomeProjeto').value.trim();
-      const descricaoProposta = document.getElementById('descricaoProposta').value.trim();
-      const numObjetivos = parseInt(document.getElementById('numObjetivos').value);
-      if (!nomeProjeto || !descricaoProposta || !numObjetivos) {
-        statusEl.textContent = '❌ Preencha todos os campos obrigatórios';
-        statusEl.classList.add('error');
-        return;
-      }
-      const objetivosEspecificos = [];
-      for (let i = 1; i <= numObjetivos; i++) {
-        const titulo = form[`oe_titulo_${i}`].value.trim();
-        const descricao = form[`oe_descricao_${i}`].value.trim();
-        if (!titulo || !descricao) {
-          statusEl.textContent = `❌ Preencha o Objetivo Específico ${i}`;
-          statusEl.classList.add('error');
-          return;
-        }
+      const objetivosEspecificos=[];
+      for(let i=1;i<=num;i++){
+        const titulo=form[`oe_titulo_${i}`].value.trim();
+        const descricao=form[`oe_descricao_${i}`].value.trim();
         objetivosEspecificos.push({numero:i,titulo,descricao});
       }
-
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span>⏳ Gerando Marco Lógico...</span><div class="loading-spinner"></div>';
-      statusEl.textContent = '⏳ Processando com IA...';
-      statusEl.classList.remove('error','success');
-
-      try {
-        // Sanitiza antes de enviar ao Make
-        const safe = buildSafePayload(editalConteudo, nomeProjeto, descricaoProposta, objetivosEspecificos);
-
-        const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
-        const response = await fetch(WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(safe)
-        });
-        if (!response.ok) throw new Error(`Erro na comunicação: ${response.status}`);
-
-        let responseText = await response.text();
-        let marcoLogico;
-        try {
-          marcoLogico = JSON.parse(responseText);
-        } catch {
-          const cleanJson = responseText.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-          marcoLogico = JSON.parse(cleanJson);
-        }
-
-        statusEl.textContent = '✅ Marco Lógico gerado. Gerando XLSX...';
-        statusEl.classList.add('success');
-        gerarXLSX(marcoLogico, nomeProjeto);
-
-      } catch (err) {
-        console.error('Erro:', err);
-        statusEl.textContent = `❌ Erro: ${err.message}`;
-        statusEl.classList.add('error');
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = '🚀 Gerar Marco Lógico';
-      }
-    });
-
-    // XLSX
-    function gerarXLSX(marco, nomeProjeto) {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js';
-      script.onload = () => {
-        const wb = XLSX.utils.book_new();
-        const resumo = [
-          ['PROJETO', nomeProjeto],
-          ['OBJETIVO GERAL', marco.marco_logico?.objetivo_geral || ''],
-          ['DATA GERAÇÃO', new Date().toLocaleDateString('pt-BR')],
-          [''],
-          ['ESTATÍSTICAS'],
-          ['Objetivos Específicos', marco.marco_logico?.objetivos_especificos?.length || 0],
-          ['Resultados', (marco.marco_logico?.objetivos_especificos||[]).reduce((acc,oe)=>acc+(oe.resultados?.length||0),0)],
-          ['Indicadores', (marco.marco_logico?.objetivos_especificos||[]).reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.indicadores?.length||0),0),0)],
-          ['Atividades', (marco.marco_logico?.objetivos_especificos||[]).reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.atividades?.length||0),0),0)]
-        ];
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumo), 'Resumo');
-
-        const marcoData = [['OE','RESULTADO','INDICADOR','META','ATIVIDADE','LÓGICA','PRAZO','VERIFICAÇÃO']];
-        (marco.marco_logico?.objetivos_especificos||[]).forEach(oe=>{
-          (oe.resultados||[]).forEach(r=>{
-            const inds = r.indicadores||[];
-            const atvs = r.atividades||[];
-            const rows = Math.max(inds.length, atvs.length, 1);
-            for(let i=0;i<rows;i++){
-              const ind = inds[i] || {};
-              const atv = atvs[i] || {};
-              marcoData.push([
-                oe.titulo||'',
-                r.titulo||'',
-                ind.texto||'',
-                ind.meta||'',
-                atv.descricao||'',
-                atv.logica_intervencao||'',
-                atv.prazo||'',
-                atv.meios_verificacao||''
-              ]);
-            }
-          });
-        });
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(marcoData), 'Marco Lógico');
-        XLSX.writeFile(wb, `Marco_Logico_${nomeProjeto.replace(/\s+/g,'_')}.xlsx`);
+      const objetivosEspecificosTexto=objetivosToOneLine(objetivosEspecificos);
+      const safe={
+        edital:sanitizeJSONText(editalConteudo),
+        nomeProjeto:sanitizeJSONText(nomeProjeto),
+        descricaoProposta:sanitizeJSONText(descricaoProposta),
+        objetivosEspecificos,
+        objetivosEspecificosTexto
       };
-      document.head.appendChild(script);
-    }
+      try{
+        submitBtn.disabled=true;
+        statusEl.textContent='Enviando para IA...';
+        const r=await fetch('https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm',{
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)
+        });
+        if(!r.ok)throw new Error('Erro HTTP '+r.status);
+        const txt=await r.text();
+        console.log(txt);
+        statusEl.textContent='✅ Resposta recebida';
+      }catch(err){statusEl.textContent='❌ '+err.message;}
+      finally{submitBtn.disabled=false;}
+    });
   </script>
 </body>
 </html>
