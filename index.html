@@ -79,7 +79,7 @@
   </main>
 
   <script>
-    const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm'; /* troque */
+    const WEBHOOK_URL = 'https://hook.us2.make.com/SEU_WEBHOOK_AQUI'; /* troque */
 
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
@@ -99,14 +99,41 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // parser robusto: remove cercas e corta entre o primeiro { e o último }
+    // Parser tolerante a vírgulas sobrando e cercas de markdown
     function parseMarco(raw){
-      const r0 = String(raw||'').replace(/^\s*json\s+/i,'').replace(/```json|```/gi,'').replace(/\uFEFF/g,'').trim();
-      const i = r0.indexOf('{'); const j = r0.lastIndexOf('}');
-      if(i<0||j<i) throw new Error('Estrutura JSON inválida');
-      const core = r0.slice(i,j+1).replace(/\r?\n/g,' ').trim();
-      const obj = JSON.parse(core);
-      if(!obj||!obj.marco_logico) throw new Error('Estrutura JSON inválida');
+      let s = String(raw || '');
+      s = s
+        .replace(/^\s*json\s+/i, '')
+        .replace(/```json|```/gi, '')
+        .replace(/\uFEFF/g, '')
+        .replace(/\r?\n/g, ' ')
+        .trim();
+
+      const i = s.indexOf('{');
+      const j = s.lastIndexOf('}');
+      if (i < 0 || j < i) throw new Error('Estrutura JSON inválida');
+      s = s.slice(i, j + 1);
+
+      // normalizações
+      s = s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+      s = s.replace(/,\s*([}\]])/g, '$1');     // remove vírgula antes de ] ou }
+      s = s.replace(/,,+/g, ',');              // vírgulas duplicadas
+      s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // controles
+
+      let obj;
+      try {
+        obj = JSON.parse(s);
+      } catch (e) {
+        // balanceamento básico se faltarem fechamentos
+        const openBr = (s.match(/\{/g) || []).length;
+        const closeBr = (s.match(/\}/g) || []).length;
+        const openArr = (s.match(/\[/g) || []).length;
+        const closeArr = (s.match(/\]/g) || []).length;
+        if (openBr > closeBr) s += '}'.repeat(openBr - closeBr);
+        if (openArr > closeArr) s += ']'.repeat(openArr - closeArr);
+        obj = JSON.parse(s);
+      }
+      if (!obj || !obj.marco_logico) throw new Error('Estrutura JSON inválida');
       return obj;
     }
 
@@ -255,5 +282,3 @@
   </script>
 </body>
 </html>
-
-
