@@ -91,121 +91,38 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // Função ultra-agressiva para extrair JSON
-    function extractMarcoLogico(raw) {
-      if (!raw) throw new Error('Resposta vazia');
-      
-      try {
+    // Parser simples e direto para extrair JSON
+    function extractMarcoLogico(raw){
+      if(!raw) throw new Error('Resposta vazia');
+      try{
         let txt = String(raw).trim();
+        console.log('Resposta recebida:', txt.substring(0, 100));
         
-        console.log('=== LIMPEZA AGRESSIVA ===');
-        console.log('Resposta original (primeiros 500):', txt.substring(0, 500));
+        // Remove markdown se houver
+        txt = txt.replace(/```json\s*/gi, '');
+        txt = txt.replace(/```\s*/g, '');
         
-        // Estratégia 1: Tenta encontrar JSON válido em qualquer lugar da string
-        // Procura por padrão {"marco_logico": em qualquer lugar
-        const jsonPattern = /\{"marco_logico"\s*:\s*\{[\s\S]*?\}\s*\}/;
-        const match = txt.match(jsonPattern);
+        // Procura o primeiro { e último }
+        const start = txt.indexOf('{');
+        const end = txt.lastIndexOf('}');
         
-        if (match) {
-          console.log('✓ Padrão JSON encontrado via regex');
-          const cleaned = match[0];
-          const obj = JSON.parse(cleaned);
-          if (obj.marco_logico) return obj;
+        if(start >= 0 && end > start) {
+          txt = txt.substring(start, end + 1);
         }
         
-        // Estratégia 2: Remove TUDO que não seja JSON
-        // Remove qualquer coisa antes do primeiro {
-        let startIdx = txt.indexOf('{');
-        if (startIdx === -1) {
-          // Tenta encontrar após remover markdown
-          txt = txt.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '');
-          startIdx = txt.indexOf('{');
+        // Parse direto
+        const obj = JSON.parse(txt);
+        
+        // Valida estrutura
+        if(obj.marco_logico) return obj;
+        if(obj.objetivo_geral && obj.objetivos_especificos) {
+          return {marco_logico: obj};
         }
         
-        if (startIdx > -1) {
-          // Conta chaves para encontrar o JSON completo
-          let depth = 0;
-          let endIdx = -1;
-          let inString = false;
-          let escape = false;
-          
-          for (let i = startIdx; i < txt.length; i++) {
-            const char = txt[i];
-            
-            if (escape) {
-              escape = false;
-              continue;
-            }
-            
-            if (char === '\\') {
-              escape = true;
-              continue;
-            }
-            
-            if (char === '"' && !escape) {
-              inString = !inString;
-              continue;
-            }
-            
-            if (!inString) {
-              if (char === '{') depth++;
-              if (char === '}') {
-                depth--;
-                if (depth === 0) {
-                  endIdx = i;
-                  break;
-                }
-              }
-            }
-          }
-          
-          if (endIdx > -1) {
-            const jsonStr = txt.substring(startIdx, endIdx + 1);
-            console.log('✓ JSON extraído por contagem de chaves');
-            console.log('JSON limpo (primeiros 200):', jsonStr.substring(0, 200));
-            
-            const obj = JSON.parse(jsonStr);
-            if (obj.marco_logico) return obj;
-            if (obj.objetivo_geral && obj.objetivos_especificos) {
-              return { marco_logico: obj };
-            }
-          }
-        }
-        
-        // Estratégia 3: Força bruta - remove caracteres problemáticos
-        console.log('Tentando força bruta...');
-        
-        // Remove todos os caracteres não-ASCII e markdown
-        txt = txt.replace(/[^\x20-\x7E\n]/g, ''); // Mantém apenas ASCII imprimível
-        txt = txt.replace(/```[^\n]*\n?/g, '');
-        txt = txt.replace(/\n+/g, ' ');
-        txt = txt.trim();
-        
-        // Tenta encontrar e extrair JSON novamente
-        const braceStart = txt.indexOf('{');
-        const braceEnd = txt.lastIndexOf('}');
-        
-        if (braceStart > -1 && braceEnd > braceStart) {
-          const possibleJson = txt.substring(braceStart, braceEnd + 1);
-          try {
-            const obj = JSON.parse(possibleJson);
-            if (obj.marco_logico || (obj.objetivo_geral && obj.objetivos_especificos)) {
-              console.log('✓ JSON extraído por força bruta');
-              return obj.marco_logico ? obj : { marco_logico: obj };
-            }
-          } catch (e) {
-            console.error('Força bruta falhou:', e.message);
-          }
-        }
-        
-        throw new Error('Nenhuma estratégia conseguiu extrair o JSON');
-        
-      } catch (e) {
-        console.error('❌ Todas as tentativas falharam:', e.message);
-        console.error('Resposta completa recebida:', raw);
-        
-        // Última tentativa: pede pro usuário verificar o webhook
-        throw new Error('Não foi possível processar a resposta. Verifique se o webhook está configurado para retornar apenas JSON puro, sem markdown ou texto adicional.');
+        throw new Error('Estrutura JSON inválida');
+      }catch(e){
+        console.error('Erro ao parsear JSON:', e);
+        throw new Error('Erro ao processar resposta: ' + e.message);
       }
     }
 
@@ -255,16 +172,10 @@
         for(let i=1;i<=n;i++){
           const div=document.createElement('div');
           div.className='objetivo-input-group';
-          div.innerHTML=`
-            <h4>Objetivo ${i}</h4>
-            <input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required>
-            <textarea name="oe_descricao_${i}" placeholder="Descrição do objetivo ${i}" required></textarea>
-          `;
+          div.innerHTML=`<h4>Objetivo ${i}</h4><input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required><textarea name="oe_descricao_${i}" placeholder="Descrição do objetivo ${i}" required></textarea>`;
           objetivosContainer.appendChild(div);
         }
-      }else{
-        objetivosSection.classList.remove('ativa');
-      }
+      }else objetivosSection.classList.remove('ativa');
     });
 
     form.addEventListener('submit',async e=>{
@@ -314,33 +225,19 @@
         if(!r.ok) throw new Error('Erro HTTP '+r.status);
         
         const txt=await r.text();
-        
-        console.log('=== DIAGNÓSTICO COMPLETO ===');
-        console.log('Status HTTP:', r.status);
-        console.log('Tamanho resposta:', txt.length, 'bytes');
-        console.log('Primeiros 50 caracteres:', txt.substring(0, 50));
-        console.log('Começa com {?', txt.trim().startsWith('{'));
-        console.log('Contém "marco_logico"?', txt.includes('marco_logico'));
-        console.log('Contém ```?', txt.includes('```'));
-        console.log('=========================');
+        console.log('Resposta da API:', txt);
         
         const marcoLogico=extractMarcoLogico(txt);
         
-        console.log('✅ Marco lógico processado com sucesso!');
         statusEl.textContent='✅ Marco Lógico gerado, preparando XLSX...'; 
         statusEl.classList.add('success');
         
         gerarXLSX(marcoLogico, nomeProjeto);
 
       }catch(err){
-        console.error('❌ Erro:', err);
+        console.error('Erro:', err);
         statusEl.textContent='❌ '+err.message; 
         statusEl.classList.add('error');
-        
-        // Sugestão ao usuário
-        if(err.message.includes('webhook')) {
-          statusEl.textContent += ' | Use um dos arquivos de configuração do webhook fornecidos.';
-        }
       }finally{
         submitBtn.disabled=false;
       }
@@ -394,15 +291,16 @@
           });
           XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(linhas),'Marco Lógico');
           XLSX.writeFile(wb,`Marco_Logico_${nomeProjeto.replace(/\s+/g,'_')}.xlsx`);
-          statusEl.textContent='✅ XLSX gerado e baixado com sucesso!'; 
+          
+          statusEl.textContent='✅ XLSX baixado com sucesso!'; 
           statusEl.classList.add('success');
         }catch(err){
-          statusEl.textContent='❌ Erro ao gerar XLSX: '+err.message; 
+          statusEl.textContent='❌ Erro XLSX: '+err.message; 
           statusEl.classList.add('error');
         }
       };
       script.onerror=()=>{
-        statusEl.textContent='❌ Falha ao carregar biblioteca XLSX';
+        statusEl.textContent='❌ Erro ao carregar XLSX';
         statusEl.classList.add('error');
       };
       document.head.appendChild(script);
