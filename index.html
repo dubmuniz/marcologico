@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <title>Marco Lógico — Humana Brasil</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.min.js"></script>
@@ -31,6 +32,8 @@
     .status{min-height:22px;color:var(--muted);margin:12px 0 0;font-size:14px}
     .status.error{color:#d32f2f}
     .status.success{color:#1E7E34}
+    .debug-info{background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto;display:none}
+    .debug-info.show{display:block}
   </style>
 </head>
 <body>
@@ -64,7 +67,10 @@
         <label>Quantidade de objetivos específicos *
           <select id="numObjetivos" required>
             <option value="">Selecione</option>
-            <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
           </select>
         </label>
       </div>
@@ -75,11 +81,12 @@
 
       <button type="submit" id="submitBtn">Gerar marco lógico</button>
       <p id="status" class="status"></p>
+      <div id="debugInfo" class="debug-info"></div>
     </form>
   </main>
 
   <script>
-    const WEBHOOK_URL = 'https://hook.us2.make.com/SEU_WEBHOOK_AQUI'; /* troque */
+    const WEBHOOK_URL = 'https://hook.us2.make.com/SEU_WEBHOOK_AQUI'; /* troque pelo seu webhook */
 
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
@@ -89,276 +96,528 @@
     const objetivosContainer = document.getElementById('objetivosContainer');
     const statusEl = document.getElementById('status');
     const submitBtn = document.getElementById('submitBtn');
+    const debugInfo = document.getElementById('debugInfo');
 
     let editalConteudo = '';
 
-    function s(t){return String(t??'').replace(/\uFEFF/g,'').replace(/\r?\n/g,' ').trim();}
-    function objetivosToOneLine(arr){
-      if(!Array.isArray(arr)) return '';
-      const clean=v=>String(v??'').replace(/[\r\n]+/g,' ').replace(/"/g,'\\"').trim();
-      return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
-    }
-
-    // Isola substring JSON equilibrada a partir de um índice, ignorando chaves dentro de strings
-    function sliceBalancedFrom(src, startIdx){
-      let inStr=false, esc=false, depth=0, started=false;
-      for(let i=startIdx;i<src.length;i++){
-        const ch=src[i];
-        if(inStr){
-          if(esc){esc=false;}
-          else if(ch==='\\'){esc=true;}
-          else if(ch=== '"'){inStr=false;}
-        }else{
-          if(ch=== '"'){inStr=true;}
-          else if(ch==='{'){depth++;started=true;}
-          else if(ch==='}'){depth--; if(started&&depth===0){return src.slice(startIdx, i+1);} }
-        }
-      }
-      return null;
-    }
-
-    // Corrige JSON de forma segura, operando fora de strings e com pilha de colchetes/chaves
-    function safeFixJSON(jsonStr){
-      const s = String(jsonStr);
-      let out=[], stack=[];
-      let inStr=false, esc=false;
-
-      const isSpace=c=>c===' '||c==='\t'||c==='\r'||c==='\n';
-      const lastNonSpace=()=>{
-        for(let k=out.length-1;k>=0;k--){const c=out[k]; if(!isSpace(c)) return c;}
-        return '';
-      };
-
-      for(let i=0;i<s.length;i++){
-        let ch=s[i];
-
-        // estado de string
-        if(inStr){
-          out.push(ch);
-          if(esc){esc=false;}
-          else if(ch==='\\'){esc=true;}
-          else if(ch==='"'){inStr=false;}
-          continue;
-        }
-
-        // fora de string
-        if(ch==='"'){inStr=true; out.push(ch); continue;}
-
-        // remover caracteres de controle
-        if(ch<' ' && ch!=='\t' && ch!==' ') continue;
-
-        // normalizar aspas tipográficas fora de string (não deveria ocorrer)
-        if(ch==='“'||ch==='”'){ch='"';}
-        if(ch==='‘'||ch==='’'){ch="'";}
-
-        // pilha
-        const top = stack.length?stack[stack.length-1]:null;
-
-        // rule: se '{' vier após '}' ou ']' dentro de array, injeta vírgula
-        if(ch==='{'||ch==='['){
-          const prev=lastNonSpace();
-          if((prev==='}'||prev===']') && top==='['){
-            if(out[out.length-1]!==','){out.push(',');}
-          }
-          out.push(ch);
-          stack.push(ch);
-          continue;
-        }
-
-        // fecha pilha
-        if(ch==='}'||ch===']'){
-          // remover vírgula à direita antes de fechar, se existir
-          let k=out.length-1; while(k>=0 && isSpace(out[k])) k--;
-          if(out[k]===','){out.splice(k,1);} // remove trailing comma
-          out.push(ch);
-          const popped = stack.pop();
-          // sanity: se mismatch, ignora
-          continue;
-        }
-
-        // vírgula: se próxima não-espaço for '}' ou ']', não escreve (trailing)
-        if(ch===','){
-          let j=i+1;
-          while(j<s.length && isSpace(s[j])) j++;
-          const nxt = s[j];
-          if(nxt==='}'||nxt===']'){ /* skip */ }
-          else{ out.push(','); }
-          continue;
-        }
-
-        // outros caracteres
-        out.push(ch);
-      }
-
-      return out.join('');
-    }
-
-    // Parser final: limpa cercas, isola objeto, corrige com safeFixJSON e faz JSON.parse
-    function parseMarco(raw){
-      let t = String(raw||'')
-        .replace(/^\s*json\s+/i,'')
-        .replace(/```json|```/gi,'')
-        .replace(/\uFEFF/g,'')
-        .replace(/\r?\n/g,' ')
+    // Função para limpar e sanitizar strings
+    function sanitizeString(str) {
+      if (str == null) return '';
+      return String(str)
+        .replace(/\uFEFF/g, '') // Remove BOM
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove caracteres de controle
+        .replace(/\r?\n/g, ' ') // Substitui quebras de linha por espaços
+        .replace(/\s+/g, ' ') // Normaliza múltiplos espaços
         .trim();
-
-      // preferir ancora "{"marco_logico"
-      let start = t.indexOf('{"marco_logico"');
-      if(start<0) start = t.indexOf('{');
-      if(start<0) throw new Error('Estrutura JSON inválida');
-
-      // extrair bloco balanceado real
-      const block = sliceBalancedFrom(t, start);
-      if(!block) throw new Error('Estrutura JSON inválida');
-
-      // corrigir somente o bloco isolado
-      const fixed = safeFixJSON(block);
-      const obj = JSON.parse(fixed);
-      if(!obj || !obj.marco_logico) throw new Error('Estrutura JSON inválida');
-      return obj;
     }
 
-    async function lerPDF(file){
-      const buf=await file.arrayBuffer();
-      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-      let t=''; for(let p=1;p<=pdf.numPages;p++){const pg=await pdf.getPage(p);const c=await pg.getTextContent();t+=c.items.map(i=>i.str).join(' ')+' ';} return t;
-    }
-    async function lerDOCX(file){
-      const buf=await file.arrayBuffer();
-      const r=await mammoth.extractRawText({arrayBuffer:buf});
-      return r.value;
+    // Função para preparar objetivos para envio (formato one-line)
+    function objetivosToOneLine(arr) {
+      if (!Array.isArray(arr)) return '';
+      return arr.map(o => {
+        const titulo = sanitizeString(o.titulo).replace(/"/g, '\\"');
+        const descricao = sanitizeString(o.descricao).replace(/"/g, '\\"');
+        return `${o.numero}. ${titulo} | ${descricao}`;
+      }).join(' || ');
     }
 
-    editalInput.addEventListener('change', async e=>{
-      const f=e.target.files[0]; if(!f) return;
-      statusEl.textContent='Lendo arquivo';
-      statusEl.classList.remove('error','success');
-      try{
-        if(f.name.endsWith('.txt')||f.type==='text/plain') editalConteudo=await f.text();
-        else if(f.name.endsWith('.pdf')||f.type==='application/pdf') editalConteudo=await lerPDF(f);
-        else if(f.name.endsWith('.docx')) editalConteudo=await lerDOCX(f);
-        else throw new Error('Formato não suportado');
-        editalConteudo=s(editalConteudo);
-        editalInfo.style.display='block';
-        editalInfo.textContent=`${f.name} carregado, ${(editalConteudo.length/1024).toFixed(1)} KB`;
-        statusEl.textContent='';
-      }catch(err){
-        statusEl.textContent='Erro ao ler arquivo, '+err.message;
+    // Parser JSON robusto e simplificado
+    function parseMarcoResponse(rawResponse) {
+      try {
+        // Log para debug
+        console.log('Resposta bruta recebida:', rawResponse.substring(0, 500) + '...');
+        
+        let jsonStr = String(rawResponse || '').trim();
+        
+        // Remove marcadores de código se existirem
+        jsonStr = jsonStr.replace(/^```json\s*/i, '');
+        jsonStr = jsonStr.replace(/```\s*$/i, '');
+        jsonStr = jsonStr.replace(/^```\s*/i, '');
+        
+        // Remove BOM e caracteres invisíveis problemáticos
+        jsonStr = jsonStr.replace(/\uFEFF/g, '');
+        jsonStr = jsonStr.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '');
+        
+        // Normaliza aspas inteligentes para aspas normais
+        jsonStr = jsonStr.replace(/[""]/g, '"');
+        jsonStr = jsonStr.replace(/['']/g, "'");
+        
+        // Tenta encontrar o início do JSON
+        let startIndex = jsonStr.indexOf('{"marco_logico"');
+        if (startIndex === -1) {
+          startIndex = jsonStr.indexOf('{"');
+          if (startIndex === -1) {
+            startIndex = jsonStr.indexOf('{');
+          }
+        }
+        
+        if (startIndex === -1) {
+          throw new Error('Não foi possível encontrar o início do JSON');
+        }
+        
+        // Extrai apenas a parte JSON
+        jsonStr = jsonStr.substring(startIndex);
+        
+        // Encontra o fim do JSON contando chaves
+        let braceCount = 0;
+        let endIndex = -1;
+        let inString = false;
+        let escapeNext = false;
+        
+        for (let i = 0; i < jsonStr.length; i++) {
+          const char = jsonStr[i];
+          
+          if (escapeNext) {
+            escapeNext = false;
+            continue;
+          }
+          
+          if (char === '\\' && inString) {
+            escapeNext = true;
+            continue;
+          }
+          
+          if (char === '"' && !escapeNext) {
+            inString = !inString;
+            continue;
+          }
+          
+          if (!inString) {
+            if (char === '{') {
+              braceCount++;
+            } else if (char === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                endIndex = i + 1;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (endIndex > 0) {
+          jsonStr = jsonStr.substring(0, endIndex);
+        }
+        
+        // Corrige problemas comuns de formatação JSON
+        
+        // 1. Remove vírgulas extras antes de fechamento
+        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+        
+        // 2. Adiciona vírgulas faltantes entre elementos
+        jsonStr = jsonStr.replace(/}(\s*{)/g, '},$1');
+        jsonStr = jsonStr.replace(/](\s*\[)/g, '],$1');
+        jsonStr = jsonStr.replace(/"(\s*"[^:]*":)/g, '",$1');
+        
+        // 3. Corrige quebras de linha dentro de strings (substituindo por espaço)
+        jsonStr = jsonStr.replace(/"([^"]*)\n([^"]*)":/g, '"$1 $2":');
+        jsonStr = jsonStr.replace(/:\s*"([^"]*)\n([^"]*)"/g, ': "$1 $2"');
+        
+        // 4. Remove caracteres de controle dentro de valores string
+        jsonStr = jsonStr.replace(/"([^"]*)"/g, function(match, p1) {
+          return '"' + p1.replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim() + '"';
+        });
+        
+        // Log do JSON processado para debug
+        console.log('JSON processado (primeiros 500 chars):', jsonStr.substring(0, 500) + '...');
+        
+        // Tenta fazer o parse
+        const parsed = JSON.parse(jsonStr);
+        
+        // Valida estrutura básica
+        if (!parsed || typeof parsed !== 'object') {
+          throw new Error('Resposta não é um objeto válido');
+        }
+        
+        if (!parsed.marco_logico) {
+          throw new Error('Resposta não contém campo marco_logico');
+        }
+        
+        return parsed;
+        
+      } catch (error) {
+        console.error('Erro no parseMarcoResponse:', error);
+        console.error('Stack trace:', error.stack);
+        
+        // Tenta uma abordagem alternativa mais agressiva
+        try {
+          console.log('Tentando parser alternativo...');
+          
+          // Remove tudo que não seja JSON
+          let cleanJson = rawResponse
+            .replace(/^[^{]*/, '') // Remove tudo antes do primeiro {
+            .replace(/[^}]*$/, '') // Remove tudo depois do último }
+            .trim();
+          
+          // Tenta avaliar como JavaScript (mais permissivo que JSON.parse)
+          const alternativeParsed = Function('"use strict"; return (' + cleanJson + ')')();
+          
+          if (alternativeParsed && alternativeParsed.marco_logico) {
+            console.log('Parser alternativo funcionou!');
+            return alternativeParsed;
+          }
+        } catch (altError) {
+          console.error('Parser alternativo também falhou:', altError);
+        }
+        
+        throw new Error(`Erro ao processar JSON: ${error.message}`);
+      }
+    }
+
+    // Função para ler PDF
+    async function lerPDF(file) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let texto = '';
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          texto += pageText + ' ';
+        }
+        
+        return sanitizeString(texto);
+      } catch (error) {
+        console.error('Erro ao ler PDF:', error);
+        throw new Error('Erro ao processar PDF: ' + error.message);
+      }
+    }
+
+    // Função para ler DOCX
+    async function lerDOCX(file) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+        return sanitizeString(result.value);
+      } catch (error) {
+        console.error('Erro ao ler DOCX:', error);
+        throw new Error('Erro ao processar DOCX: ' + error.message);
+      }
+    }
+
+    // Event listener para upload do arquivo
+    editalInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      statusEl.textContent = 'Lendo arquivo...';
+      statusEl.classList.remove('error', 'success');
+      
+      try {
+        const fileName = file.name.toLowerCase();
+        
+        if (fileName.endsWith('.txt') || file.type === 'text/plain') {
+          editalConteudo = await file.text();
+        } else if (fileName.endsWith('.pdf') || file.type === 'application/pdf') {
+          editalConteudo = await lerPDF(file);
+        } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
+          editalConteudo = await lerDOCX(file);
+        } else {
+          throw new Error('Formato não suportado. Use PDF, DOCX ou TXT.');
+        }
+        
+        editalConteudo = sanitizeString(editalConteudo);
+        
+        if (!editalConteudo || editalConteudo.length < 10) {
+          throw new Error('Arquivo vazio ou com conteúdo insuficiente');
+        }
+        
+        editalInfo.style.display = 'block';
+        editalInfo.textContent = `✓ ${file.name} carregado com sucesso (${(editalConteudo.length / 1024).toFixed(1)} KB)`;
+        statusEl.textContent = '';
+      } catch (error) {
+        statusEl.textContent = 'Erro ao ler arquivo: ' + error.message;
         statusEl.classList.add('error');
+        editalInfo.style.display = 'none';
+        editalConteudo = '';
       }
     });
 
-    numObjetivosSelect.addEventListener('change', e=>{
-      const n=parseInt(e.target.value)||0;
-      objetivosContainer.innerHTML='';
-      if(n>0){
+    // Event listener para seleção de número de objetivos
+    numObjetivosSelect.addEventListener('change', (e) => {
+      const numObjetivos = parseInt(e.target.value) || 0;
+      objetivosContainer.innerHTML = '';
+      
+      if (numObjetivos > 0) {
         objetivosSection.classList.add('ativa');
-        for(let i=1;i<=n;i++){
-          const div=document.createElement('div');
-          div.className='objetivo-input-group';
-          div.innerHTML=`
-            <strong>Objetivo ${i}</strong>
+        
+        for (let i = 1; i <= numObjetivos; i++) {
+          const div = document.createElement('div');
+          div.className = 'objetivo-input-group';
+          div.innerHTML = `
+            <strong>Objetivo Específico ${i}</strong>
             <input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required>
-            <textarea name="oe_descricao_${i}" placeholder="Descrição do objetivo ${i}" required></textarea>
+            <textarea name="oe_descricao_${i}" placeholder="Descrição detalhada do objetivo ${i}" required></textarea>
           `;
           objetivosContainer.appendChild(div);
         }
-      }else objetivosSection.classList.remove('ativa');
+      } else {
+        objetivosSection.classList.remove('ativa');
+      }
     });
 
-    form.addEventListener('submit', async e=>{
+    // Event listener para submissão do formulário
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if(!editalConteudo){statusEl.textContent='Carregue o edital';statusEl.classList.add('error');return;}
-      const nomeProjeto=s(document.getElementById('nomeProjeto').value);
-      const descricaoProposta=s(document.getElementById('descricaoProposta').value);
-      const n=parseInt(numObjetivosSelect.value)||0;
-      if(!nomeProjeto||!descricaoProposta||!n){statusEl.textContent='Preencha todos os campos';statusEl.classList.add('error');return;}
-
-      const objetivosEspecificos=[];
-      for(let i=1;i<=n;i++){
-        const titulo=s(form[`oe_titulo_${i}`].value);
-        const descricao=s(form[`oe_descricao_${i}`].value);
-        if(!titulo||!descricao){statusEl.textContent=`Preencha o objetivo ${i}`;statusEl.classList.add('error');return;}
-        objetivosEspecificos.push({numero:i,titulo,descricao});
-      }
-
-      const payload={
-        edital:editalConteudo,
-        nomeProjeto,
-        descricaoProposta,
-        objetivosEspecificos,
-        objetivosEspecificosTexto:objetivosToOneLine(objetivosEspecificos)
-      };
-
-      try{
-        submitBtn.disabled=true;
-        statusEl.textContent='Processando com IA';
-        statusEl.classList.remove('error','success');
-
-        const r=await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const raw=await r.text(); // ler uma vez
-
-        const obj=parseMarco(raw);
-        gerarXLSX(obj, nomeProjeto);
-        statusEl.textContent='XLSX gerado';
-        statusEl.classList.add('success');
-      }catch(err){
-        statusEl.textContent='Erro ao processar resposta, '+err.message;
+      
+      // Validações
+      if (!editalConteudo) {
+        statusEl.textContent = 'Por favor, carregue o arquivo do edital';
         statusEl.classList.add('error');
-      }finally{
-        submitBtn.disabled=false;
+        return;
+      }
+      
+      const nomeProjeto = sanitizeString(document.getElementById('nomeProjeto').value);
+      const descricaoProposta = sanitizeString(document.getElementById('descricaoProposta').value);
+      const numObjetivos = parseInt(numObjetivosSelect.value) || 0;
+      
+      if (!nomeProjeto || !descricaoProposta || !numObjetivos) {
+        statusEl.textContent = 'Por favor, preencha todos os campos obrigatórios';
+        statusEl.classList.add('error');
+        return;
+      }
+      
+      // Coleta objetivos específicos
+      const objetivosEspecificos = [];
+      for (let i = 1; i <= numObjetivos; i++) {
+        const titulo = sanitizeString(form[`oe_titulo_${i}`].value);
+        const descricao = sanitizeString(form[`oe_descricao_${i}`].value);
+        
+        if (!titulo || !descricao) {
+          statusEl.textContent = `Por favor, preencha completamente o objetivo ${i}`;
+          statusEl.classList.add('error');
+          return;
+        }
+        
+        objetivosEspecificos.push({
+          numero: i,
+          titulo: titulo,
+          descricao: descricao
+        });
+      }
+      
+      // Prepara payload
+      const payload = {
+        edital: editalConteudo,
+        nomeProjeto: nomeProjeto,
+        descricaoProposta: descricaoProposta,
+        objetivosEspecificos: objetivosEspecificos,
+        objetivosEspecificosTexto: objetivosToOneLine(objetivosEspecificos)
+      };
+      
+      try {
+        submitBtn.disabled = true;
+        statusEl.textContent = 'Enviando dados para processamento...';
+        statusEl.classList.remove('error', 'success');
+        debugInfo.classList.remove('show');
+        
+        // Envia request
+        const response = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Erro HTTP: ${response.status} ${response.statusText}`);
+        }
+        
+        statusEl.textContent = 'Processando resposta da IA...';
+        
+        const responseText = await response.text();
+        
+        // Debug: mostra parte da resposta
+        console.log('Resposta recebida (primeiros 1000 chars):', responseText.substring(0, 1000));
+        
+        // Parse da resposta
+        const parsedResponse = parseMarcoResponse(responseText);
+        
+        // Gera o arquivo XLSX
+        statusEl.textContent = 'Gerando arquivo Excel...';
+        gerarXLSX(parsedResponse, nomeProjeto);
+        
+        statusEl.textContent = '✓ Marco Lógico gerado com sucesso! O download deve iniciar automaticamente.';
+        statusEl.classList.add('success');
+        
+      } catch (error) {
+        console.error('Erro completo:', error);
+        statusEl.textContent = `Erro: ${error.message}`;
+        statusEl.classList.add('error');
+        
+        // Mostra informações de debug
+        debugInfo.innerHTML = `<strong>Detalhes do erro:</strong><br>${error.stack || error.message}`;
+        debugInfo.classList.add('show');
+      } finally {
+        submitBtn.disabled = false;
       }
     });
 
-    function gerarXLSX(resp, nomeProjeto){
-      const marco=resp.marco_logico||{};
-      const objetivos=Array.isArray(marco.objetivos_especificos)?marco.objetivos_especificos:[];
-      const wb=XLSX.utils.book_new();
-
-      const totalResultados=objetivos.reduce((a,oe)=>a+(oe.resultados?.length||0),0);
-      const totalIndicadores=objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.indicadores?.length||0),0),0);
-      const totalAtividades=objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.atividades?.length||0),0),0);
-
-      const resumo=[
-        ['PROJETO',nomeProjeto],
-        ['OBJETIVO GERAL',marco.objetivo_geral||''],
-        ['DATA',new Date().toLocaleDateString('pt-BR')],
-        [''],
-        ['ESTATÍSTICAS'],
-        ['Objetivos',objetivos.length],
-        ['Resultados',totalResultados],
-        ['Indicadores',totalIndicadores],
-        ['Atividades',totalAtividades]
-      ];
-      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(resumo),'Resumo');
-
-      const linhas=[['OE','RESULTADO','INDICADOR','META','ATIVIDADE','LÓGICA','PRAZO','VERIFICAÇÃO']];
-      objetivos.forEach(oe=>{
-        (oe.resultados||[]).forEach(r=>{
-          const inds=r.indicadores||[];
-          const atvs=r.atividades||[];
-          const n=Math.max(inds.length,atvs.length,1);
-          for(let i=0;i<n;i++){
-            const ind=inds[i]||{}, atv=atvs[i]||{};
-            linhas.push([
-              oe.titulo||'',
-              r.titulo||'',
-              ind.texto||'',
-              ind.meta||'',
-              atv.descricao||'',
-              atv.logica_intervencao||'',
-              atv.prazo||'',
-              atv.meios_verificacao||''
-            ]);
+    // Função para gerar XLSX
+    function gerarXLSX(responseData, nomeProjeto) {
+      try {
+        const marco = responseData.marco_logico || {};
+        const objetivos = Array.isArray(marco.objetivos_especificos) ? marco.objetivos_especificos : [];
+        
+        // Cria novo workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Calcula estatísticas
+        let totalResultados = 0;
+        let totalIndicadores = 0;
+        let totalAtividades = 0;
+        
+        objetivos.forEach(objetivo => {
+          const resultados = Array.isArray(objetivo.resultados) ? objetivo.resultados : [];
+          totalResultados += resultados.length;
+          
+          resultados.forEach(resultado => {
+            const indicadores = Array.isArray(resultado.indicadores) ? resultado.indicadores : [];
+            const atividades = Array.isArray(resultado.atividades) ? resultado.atividades : [];
+            totalIndicadores += indicadores.length;
+            totalAtividades += atividades.length;
+          });
+        });
+        
+        // Aba 1: Resumo
+        const resumoData = [
+          ['MARCO LÓGICO - RESUMO EXECUTIVO'],
+          [''],
+          ['Informações do Projeto'],
+          ['Nome do Projeto:', nomeProjeto],
+          ['Objetivo Geral:', marco.objetivo_geral || 'Não especificado'],
+          ['Data de Geração:', new Date().toLocaleDateString('pt-BR')],
+          [''],
+          ['Estatísticas do Marco Lógico'],
+          ['Objetivos Específicos:', objetivos.length],
+          ['Resultados Esperados:', totalResultados],
+          ['Indicadores:', totalIndicadores],
+          ['Atividades:', totalAtividades],
+          [''],
+          ['Status:', 'Documento gerado automaticamente via IA']
+        ];
+        
+        const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
+        
+        // Ajusta larguras das colunas
+        wsResumo['!cols'] = [
+          { wch: 30 },
+          { wch: 60 }
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
+        
+        // Aba 2: Marco Lógico Completo
+        const marcoData = [
+          ['OBJETIVO ESPECÍFICO', 'RESULTADO ESPERADO', 'INDICADOR', 'META', 'ATIVIDADE', 'LÓGICA DE INTERVENÇÃO', 'PRAZO', 'MEIOS DE VERIFICAÇÃO']
+        ];
+        
+        objetivos.forEach((objetivo, objIndex) => {
+          const tituloObjetivo = sanitizeString(objetivo.titulo || `Objetivo ${objIndex + 1}`);
+          const resultados = Array.isArray(objetivo.resultados) ? objetivo.resultados : [];
+          
+          if (resultados.length === 0) {
+            marcoData.push([tituloObjetivo, '', '', '', '', '', '', '']);
+          } else {
+            resultados.forEach((resultado, resIndex) => {
+              const tituloResultado = sanitizeString(resultado.titulo || `Resultado ${resIndex + 1}`);
+              const indicadores = Array.isArray(resultado.indicadores) ? resultado.indicadores : [];
+              const atividades = Array.isArray(resultado.atividades) ? resultado.atividades : [];
+              
+              const maxRows = Math.max(indicadores.length, atividades.length, 1);
+              
+              for (let i = 0; i < maxRows; i++) {
+                const indicador = indicadores[i] || {};
+                const atividade = atividades[i] || {};
+                
+                marcoData.push([
+                  i === 0 ? tituloObjetivo : '',
+                  i === 0 ? tituloResultado : '',
+                  sanitizeString(indicador.texto || indicador.descricao || ''),
+                  sanitizeString(indicador.meta || ''),
+                  sanitizeString(atividade.descricao || atividade.titulo || ''),
+                  sanitizeString(atividade.logica_intervencao || ''),
+                  sanitizeString(atividade.prazo || ''),
+                  sanitizeString(atividade.meios_verificacao || indicador.meios_verificacao || '')
+                ]);
+              }
+            });
           }
         });
-      });
-      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(linhas),'Marco Lógico');
+        
+        const wsMarco = XLSX.utils.aoa_to_sheet(marcoData);
+        
+        // Ajusta larguras das colunas para melhor visualização
+        wsMarco['!cols'] = [
+          { wch: 25 }, // Objetivo
+          { wch: 25 }, // Resultado
+          { wch: 30 }, // Indicador
+          { wch: 15 }, // Meta
+          { wch: 30 }, // Atividade
+          { wch: 25 }, // Lógica
+          { wch: 12 }, // Prazo
+          { wch: 20 }  // Verificação
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, wsMarco, 'Marco Lógico');
+        
+        // Aba 3: Detalhamento por Objetivo
+        objetivos.forEach((objetivo, index) => {
+          const sheetName = `Objetivo ${index + 1}`;
+          const objData = [
+            [`OBJETIVO ESPECÍFICO ${index + 1}`],
+            [''],
+            ['Título:', sanitizeString(objetivo.titulo || '')],
+            ['Descrição:', sanitizeString(objetivo.descricao || '')],
+            [''],
+            ['RESULTADOS E ATIVIDADES'],
+            ['']
+          ];
+          
+          const resultados = Array.isArray(objetivo.resultados) ? objetivo.resultados : [];
+          resultados.forEach((resultado, resIndex) => {
+            objData.push([`Resultado ${resIndex + 1}: ${sanitizeString(resultado.titulo || '')}`]);
+            
+            const atividades = Array.isArray(resultado.atividades) ? resultado.atividades : [];
+            atividades.forEach((atividade, atvIndex) => {
+              objData.push([`  → Atividade ${resIndex + 1}.${atvIndex + 1}: ${sanitizeString(atividade.descricao || '')}`]);
+            });
+            
+            objData.push(['']);
+          });
+          
+          const wsObj = XLSX.utils.aoa_to_sheet(objData);
+          wsObj['!cols'] = [{ wch: 80 }];
+          
+          XLSX.utils.book_append_sheet(wb, wsObj, sheetName.substring(0, 31)); // Excel limita nome a 31 chars
+        });
+        
+        // Gera nome do arquivo
+        const nomeArquivo = `Marco_Logico_${nomeProjeto.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.xlsx`;
+        
+        // Salva o arquivo
+        XLSX.writeFile(wb, nomeArquivo);
+        
+        console.log('Arquivo XLSX gerado com sucesso:', nomeArquivo);
+        
+      } catch (error) {
+        console.error('Erro ao gerar XLSX:', error);
+        throw new Error('Erro ao gerar arquivo Excel: ' + error.message);
+      }
+    }
 
-      const filename=`Marco_Logico_${String(nomeProjeto).replace(/\s+/g,'_')}.xlsx`;
-      XLSX.writeFile(wb,filename);
+    // Adiciona listener para debug em desenvolvimento
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      window.addEventListener('error', (e) => {
+        console.error('Erro global capturado:', e);
+        debugInfo.innerHTML += `<br>Erro: ${e.message}`;
+        debugInfo.classList.add('show');
+      });
     }
   </script>
 </body>
