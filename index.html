@@ -79,7 +79,7 @@
   </main>
 
   <script>
-    const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm'; /* troque */
+    const WEBHOOK_URL = 'https://hook.us2.make.com/SEU_WEBHOOK_AQUI'; /* troque */
 
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
@@ -99,9 +99,11 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // Parser tolerante a vírgulas sobrando e cercas de markdown
+    // === Parser ultra tolerante ===
     function parseMarco(raw){
       let s = String(raw || '');
+
+      // 1) limpar cercas, BOM, quebras e "json " solto
       s = s
         .replace(/^\s*json\s+/i, '')
         .replace(/```json|```/gi, '')
@@ -109,30 +111,58 @@
         .replace(/\r?\n/g, ' ')
         .trim();
 
+      // 2) isolar do primeiro { ao último }
       const i = s.indexOf('{');
       const j = s.lastIndexOf('}');
       if (i < 0 || j < i) throw new Error('Estrutura JSON inválida');
       s = s.slice(i, j + 1);
 
-      // normalizações
+      // 3) normalizações comuns
       s = s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
-      s = s.replace(/,\s*([}\]])/g, '$1');     // remove vírgula antes de ] ou }
-      s = s.replace(/,,+/g, ',');              // vírgulas duplicadas
-      s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); // controles
+      // vírgula antes de } ou ]
+      s = s.replace(/,\s*([}\]])/g, '$1');
+      // vírgulas duplicadas
+      s = s.replace(/,,+/g, ',');
+      // inserir vírgula ausente entre blocos de objeto e array
+      s = s.replace(/}\s*{/g, '},{');   // ...}{... → ...},{...
+      s = s.replace(/}\s*\[/g, '},[');  // ...}[…] → …},[…]
+      s = s.replace(/\]\s*{/g, '],[');  // …] {… → …],[…
+      // remover caracteres de controle invisíveis
+      s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
+      // 4) tentar parsear; se falhar, rodar uma rotina de reparo incremental
       let obj;
       try {
         obj = JSON.parse(s);
       } catch (e) {
-        // balanceamento básico se faltarem fechamentos
-        const openBr = (s.match(/\{/g) || []).length;
-        const closeBr = (s.match(/\}/g) || []).length;
-        const openArr = (s.match(/\[/g) || []).length;
-        const closeArr = (s.match(/\]/g) || []).length;
-        if (openBr > closeBr) s += '}'.repeat(openBr - closeBr);
-        if (openArr > closeArr) s += ']'.repeat(openArr - closeArr);
-        obj = JSON.parse(s);
+        // tentativa incremental: até 3 rounds de reparo leve
+        let fixed = s;
+        for (let round = 0; round < 3; round++) {
+          // remove vírgulas antes de } ou ] novamente (após inserções)
+          fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+          // corrige padrões } { faltando vírgula
+          fixed = fixed.replace(/}\s*{/g, '},{');
+          fixed = fixed.replace(/}\s*\[/g, '},[');
+          fixed = fixed.replace(/\]\s*{/g, '],{');
+
+          // balanceamento básico
+          const openBr = (fixed.match(/\{/g) || []).length;
+          const closeBr = (fixed.match(/\}/g) || []).length;
+          const openArr = (fixed.match(/\[/g) || []).length;
+          const closeArr = (fixed.match(/\]/g) || []).length;
+          if (openBr > closeBr) fixed += '}'.repeat(openBr - closeBr);
+          if (openArr > closeArr) fixed += ']'.repeat(openArr - closeArr);
+
+          try {
+            obj = JSON.parse(fixed);
+            break;
+          } catch (_) {
+            // continua tentando no próximo round
+          }
+        }
+        if (!obj) throw e;
       }
+
       if (!obj || !obj.marco_logico) throw new Error('Estrutura JSON inválida');
       return obj;
     }
