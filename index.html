@@ -8,26 +8,27 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root{--green:#1E7E34;--ink:#1b1b1b;--bg:#fafafa;--muted:#667085}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
     .wrap{max-width:900px;margin:0 auto;padding:20px}
-    header{text-align:center;padding:24px 0 28px}
+    header{text-align:center;padding:20px 0}
     h1{margin:0 0 6px;font-size:26px}
-    .lead{color:var(--muted);margin:0 0 10px}
-    form{background:#fff;border:1px solid #eee;border-radius:12px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-    .form-section{margin-bottom:22px}
-    label{display:block;margin:12px 0 6px;font-weight:600;color:var(--ink)}
+    .lead{color:var(--muted);margin:0 0 12px}
+    form{background:#fff;border:1px solid #eee;border-radius:12px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .form-section{margin-bottom:18px}
+    label{display:block;margin:10px 0 6px;font-weight:600}
     input,textarea,select{width:100%;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit}
     textarea{resize:vertical;min-height:110px}
     .file-info{background:#f0f7f4;border-left:4px solid var(--green);padding:10px;border-radius:6px;margin:8px 0;font-size:13px}
-    .objetivos-section{display:none;margin-top:8px}
+    .objetivos-section{display:none}
     .objetivos-section.ativa{display:block}
-    .objetivo-input-group{background:#f9f9f9;border:1px solid #e3e8ee;border-radius:8px;padding:14px;margin:8px 0}
+    .objetivo-input-group{background:#f9f9f9;border:1px solid #e3e8ee;border-radius:8px;padding:12px;margin:8px 0}
     button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 20px;font-weight:600;cursor:pointer;font-size:16px;width:100%}
     button:disabled{opacity:.6;cursor:not-allowed}
-    .status{min-height:22px;color:var(--muted);margin:14px 0 0;font-size:14px}
+    .status{min-height:22px;color:var(--muted);margin:12px 0 0;font-size:14px}
     .status.error{color:#d32f2f}
     .status.success{color:var(--green)}
   </style>
@@ -35,37 +36,37 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Gere automaticamente a partir do edital e da proposta</p>
+    <p class="lead">Gerar a partir do edital e da proposta</p>
   </header>
 
   <main class="wrap">
     <form id="marcoForm" novalidate>
       <div class="form-section">
-        <h3>Arquivo do edital</h3>
-        <input type="file" id="edital" accept=".pdf,.docx,.txt" required>
+        <label>Arquivo do edital *
+          <input type="file" id="edital" accept=".pdf,.docx,.txt" required>
+        </label>
         <div id="editalInfo" class="file-info" style="display:none"></div>
       </div>
 
       <div class="form-section">
-        <h3>Projeto</h3>
         <label>Nome do Projeto *
           <input id="nomeProjeto" type="text" required placeholder="Ex: Turismo Regenerativo na Ilha do Bananal">
         </label>
       </div>
 
       <div class="form-section">
-        <h3>Descrição da proposta</h3>
-        <label>Resumo *
+        <label>Descrição da proposta *
           <textarea id="descricaoProposta" required placeholder="Contexto, atividades, público e resultados esperados"></textarea>
         </label>
       </div>
 
       <div class="form-section">
-        <h3>Objetivos específicos</h3>
-        <select id="numObjetivos" required>
-          <option value="">Selecione a quantidade</option>
-          <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-        </select>
+        <label>Quantidade de objetivos específicos *
+          <select id="numObjetivos" required>
+            <option value="">Selecione</option>
+            <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+          </select>
+        </label>
       </div>
 
       <div class="form-section objetivos-section" id="objetivosSection">
@@ -77,10 +78,8 @@
     </form>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
-    // Troque pelo seu webhook do cenário Make
-    const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
+    const WEBHOOK_URL = 'https://hook.us2.make.com/SEU_WEBHOOK_AQUI'; /* troque */
 
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
@@ -93,23 +92,21 @@
 
     let editalConteudo = '';
 
-    function sanitizeText(s){return String(s??'').replace(/\uFEFF/g,'').replace(/\r?\n/g,' ').trim();}
+    function s(t){return String(t??'').replace(/\uFEFF/g,'').replace(/\r?\n/g,' ').trim();}
     function objetivosToOneLine(arr){
       if(!Array.isArray(arr)) return '';
       const clean=v=>String(v??'').replace(/[\r\n]+/g,' ').replace(/"/g,'\\"').trim();
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // Extrator robusto: usa primeiro { e último }
-    function extractMarcoLogico(raw){
-      const s0 = String(raw ?? '');
-      const s1 = s0.replace(/```json|```/gi,'').replace(/\uFEFF/g,'').trim();
-      const first = s1.indexOf('{');
-      const last  = s1.lastIndexOf('}');
-      if (first === -1 || last === -1 || last <= first) throw new Error('Estrutura JSON inválida');
-      const core  = s1.slice(first, last + 1).replace(/\r?\n/g,' ').trim();
-      const obj   = JSON.parse(core);
-      if (!obj || !obj.marco_logico) throw new Error('Estrutura JSON inválida');
+    // parser robusto: remove cercas e corta entre o primeiro { e o último }
+    function parseMarco(raw){
+      const r0 = String(raw||'').replace(/^\s*json\s+/i,'').replace(/```json|```/gi,'').replace(/\uFEFF/g,'').trim();
+      const i = r0.indexOf('{'); const j = r0.lastIndexOf('}');
+      if(i<0||j<i) throw new Error('Estrutura JSON inválida');
+      const core = r0.slice(i,j+1).replace(/\r?\n/g,' ').trim();
+      const obj = JSON.parse(core);
+      if(!obj||!obj.marco_logico) throw new Error('Estrutura JSON inválida');
       return obj;
     }
 
@@ -130,11 +127,11 @@
       statusEl.textContent='Lendo arquivo';
       statusEl.classList.remove('error','success');
       try{
-        if(f.name.endsWith('.txt')) editalConteudo = await f.text();
-        else if(f.name.endsWith('.pdf')) editalConteudo = await lerPDF(f);
-        else if(f.name.endsWith('.docx')) editalConteudo = await lerDOCX(f);
+        if(f.name.endsWith('.txt')||f.type==='text/plain') editalConteudo=await f.text();
+        else if(f.name.endsWith('.pdf')||f.type==='application/pdf') editalConteudo=await lerPDF(f);
+        else if(f.name.endsWith('.docx')) editalConteudo=await lerDOCX(f);
         else throw new Error('Formato não suportado');
-        editalConteudo = sanitizeText(editalConteudo);
+        editalConteudo=s(editalConteudo);
         editalInfo.style.display='block';
         editalInfo.textContent=`${f.name} carregado, ${(editalConteudo.length/1024).toFixed(1)} KB`;
         statusEl.textContent='';
@@ -159,33 +156,31 @@
           `;
           objetivosContainer.appendChild(div);
         }
-      }else{
-        objetivosSection.classList.remove('ativa');
-      }
+      }else objetivosSection.classList.remove('ativa');
     });
 
     form.addEventListener('submit', async e=>{
       e.preventDefault();
       if(!editalConteudo){statusEl.textContent='Carregue o edital';statusEl.classList.add('error');return;}
-      const nomeProjeto = sanitizeText(document.getElementById('nomeProjeto').value);
-      const descricaoProposta = sanitizeText(document.getElementById('descricaoProposta').value);
-      const n = parseInt(numObjetivosSelect.value)||0;
+      const nomeProjeto=s(document.getElementById('nomeProjeto').value);
+      const descricaoProposta=s(document.getElementById('descricaoProposta').value);
+      const n=parseInt(numObjetivosSelect.value)||0;
       if(!nomeProjeto||!descricaoProposta||!n){statusEl.textContent='Preencha todos os campos';statusEl.classList.add('error');return;}
 
       const objetivosEspecificos=[];
       for(let i=1;i<=n;i++){
-        const titulo = sanitizeText(form[`oe_titulo_${i}`].value);
-        const descricao = sanitizeText(form[`oe_descricao_${i}`].value);
+        const titulo=s(form[`oe_titulo_${i}`].value);
+        const descricao=s(form[`oe_descricao_${i}`].value);
         if(!titulo||!descricao){statusEl.textContent=`Preencha o objetivo ${i}`;statusEl.classList.add('error');return;}
         objetivosEspecificos.push({numero:i,titulo,descricao});
       }
 
-      const payload = {
-        edital: editalConteudo,
+      const payload={
+        edital:editalConteudo,
         nomeProjeto,
         descricaoProposta,
         objetivosEspecificos,
-        objetivosEspecificosTexto: objetivosToOneLine(objetivosEspecificos)
+        objetivosEspecificosTexto:objetivosToOneLine(objetivosEspecificos)
       };
 
       try{
@@ -193,22 +188,14 @@
         statusEl.textContent='Processando com IA';
         statusEl.classList.remove('error','success');
 
-        const r = await fetch(WEBHOOK_URL,{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(payload)
-        });
+        const r=await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         if(!r.ok) throw new Error('HTTP '+r.status);
+        const raw=await r.text(); // ler uma vez
 
-        // ler uma única vez
-        const raw = await r.text();
-
-        const obj = extractMarcoLogico(raw); // aceita cercas e ruídos
-        if(!obj?.marco_logico) throw new Error('Sem chave marco_logico');
-
-        statusEl.textContent='Marco lógico gerado, criando XLSX';
-        statusEl.classList.add('success');
+        const obj=parseMarco(raw);
         gerarXLSX(obj, nomeProjeto);
+        statusEl.textContent='XLSX gerado';
+        statusEl.classList.add('success');
       }catch(err){
         statusEl.textContent='Erro ao processar resposta, '+err.message;
         statusEl.classList.add('error');
@@ -218,28 +205,28 @@
     });
 
     function gerarXLSX(resp, nomeProjeto){
-      const marco = resp.marco_logico||{};
-      const objetivos = Array.isArray(marco.objetivos_especificos)?marco.objetivos_especificos:[];
-      const wb = XLSX.utils.book_new();
+      const marco=resp.marco_logico||{};
+      const objetivos=Array.isArray(marco.objetivos_especificos)?marco.objetivos_especificos:[];
+      const wb=XLSX.utils.book_new();
 
-      const totalResultados = objetivos.reduce((a,oe)=>a+(oe.resultados?.length||0),0);
-      const totalIndicadores = objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.indicadores?.length||0),0),0);
-      const totalAtividades = objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.atividades?.length||0),0),0);
+      const totalResultados=objetivos.reduce((a,oe)=>a+(oe.resultados?.length||0),0);
+      const totalIndicadores=objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.indicadores?.length||0),0),0);
+      const totalAtividades=objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.atividades?.length||0),0),0);
 
-      const resumo = [
-        ['PROJETO', nomeProjeto],
-        ['OBJETIVO GERAL', marco.objetivo_geral||''],
-        ['DATA', new Date().toLocaleDateString('pt-BR')],
+      const resumo=[
+        ['PROJETO',nomeProjeto],
+        ['OBJETIVO GERAL',marco.objetivo_geral||''],
+        ['DATA',new Date().toLocaleDateString('pt-BR')],
         [''],
         ['ESTATÍSTICAS'],
-        ['Objetivos', objetivos.length],
-        ['Resultados', totalResultados],
-        ['Indicadores', totalIndicadores],
-        ['Atividades', totalAtividades]
+        ['Objetivos',objetivos.length],
+        ['Resultados',totalResultados],
+        ['Indicadores',totalIndicadores],
+        ['Atividades',totalAtividades]
       ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumo), 'Resumo');
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(resumo),'Resumo');
 
-      const linhas = [['OE','RESULTADO','INDICADOR','META','ATIVIDADE','LÓGICA','PRAZO','VERIFICAÇÃO']];
+      const linhas=[['OE','RESULTADO','INDICADOR','META','ATIVIDADE','LÓGICA','PRAZO','VERIFICAÇÃO']];
       objetivos.forEach(oe=>{
         (oe.resultados||[]).forEach(r=>{
           const inds=r.indicadores||[];
@@ -260,12 +247,10 @@
           }
         });
       });
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(linhas), 'Marco Lógico');
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(linhas),'Marco Lógico');
 
-      const filename = `Marco_Logico_${String(nomeProjeto).replace(/\s+/g,'_')}.xlsx`;
-      XLSX.writeFile(wb, filename);
-      statusEl.textContent='XLSX gerado';
-      statusEl.classList.add('success');
+      const filename=`Marco_Logico_${String(nomeProjeto).replace(/\s+/g,'_')}.xlsx`;
+      XLSX.writeFile(wb,filename);
     }
   </script>
 </body>
