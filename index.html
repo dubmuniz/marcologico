@@ -79,7 +79,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script>
-    const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm'; // troque
+    // Troque pelo seu webhook do cenário Make
+    const WEBHOOK_URL = 'https://hook.us2.make.com/SEU_WEBHOOK_AQUI';
 
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
@@ -99,32 +100,17 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
+    // Extrator robusto: usa primeiro { e último }
     function extractMarcoLogico(raw){
-      const txt = String(raw||'')
-        .replace(/```json/g,'')
-        .replace(/```/g,'')
-        .replace(/\uFEFF/g,'')
-        .replace(/\r?\n/g,' ')
-        .trim();
-      try{
-        const obj = JSON.parse(txt);
-        if(obj && obj.marco_logico) return obj;
-      }catch{}
-      const i = txt.indexOf('{"marco_logico"');
-      if(i>=0){
-        let depth=0,end=-1;
-        for(let k=i;k<txt.length;k++){
-          const c=txt[k];
-          if(c==='{') depth++;
-          else if(c==='}'){ depth--; if(depth===0){ end=k; break; } }
-        }
-        if(end>i){
-          const slice = txt.slice(i,end+1);
-          const j = JSON.parse(slice);
-          if(j && j.marco_logico) return j;
-        }
-      }
-      throw new Error('Estrutura JSON inválida');
+      const s0 = String(raw ?? '');
+      const s1 = s0.replace(/```json|```/gi,'').replace(/\uFEFF/g,'').trim();
+      const first = s1.indexOf('{');
+      const last  = s1.lastIndexOf('}');
+      if (first === -1 || last === -1 || last <= first) throw new Error('Estrutura JSON inválida');
+      const core  = s1.slice(first, last + 1).replace(/\r?\n/g,' ').trim();
+      const obj   = JSON.parse(core);
+      if (!obj || !obj.marco_logico) throw new Error('Estrutura JSON inválida');
+      return obj;
     }
 
     async function lerPDF(file){
@@ -142,6 +128,7 @@
     editalInput.addEventListener('change', async e=>{
       const f=e.target.files[0]; if(!f) return;
       statusEl.textContent='Lendo arquivo';
+      statusEl.classList.remove('error','success');
       try{
         if(f.name.endsWith('.txt')) editalConteudo = await f.text();
         else if(f.name.endsWith('.pdf')) editalConteudo = await lerPDF(f);
@@ -172,7 +159,9 @@
           `;
           objetivosContainer.appendChild(div);
         }
-      }else objetivosSection.classList.remove('ativa');
+      }else{
+        objetivosSection.classList.remove('ativa');
+      }
     });
 
     form.addEventListener('submit', async e=>{
@@ -204,11 +193,17 @@
         statusEl.textContent='Processando com IA';
         statusEl.classList.remove('error','success');
 
-        const r = await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const r = await fetch(WEBHOOK_URL,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(payload)
+        });
         if(!r.ok) throw new Error('HTTP '+r.status);
-        const raw = await r.text(); // ler uma vez
 
-        const obj = extractMarcoLogico(raw); // aceita ```json, \n e variações
+        // ler uma única vez
+        const raw = await r.text();
+
+        const obj = extractMarcoLogico(raw); // aceita cercas e ruídos
         if(!obj?.marco_logico) throw new Error('Sem chave marco_logico');
 
         statusEl.textContent='Marco lógico gerado, criando XLSX';
