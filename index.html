@@ -114,42 +114,27 @@
       }).join(' || ');
     }
 
-    /* ====== PARSER ORIGINAL RESTAURADO ====== */
+    /* PARSER ORIGINAL */
     function reconstructTruncatedJSON(jsonStr) {
-      console.log('=== RECONSTRUINDO JSON TRUNCADO ===');
       jsonStr = jsonStr.replace(/^```json\s*/gi, '').replace(/```\s*$/gi, '').trim();
-      const lastChars = jsonStr.slice(-20);
-      const isTruncated = !lastChars.includes('}') || jsonStr.split('{').length !== jsonStr.split('}').length;
+      const isTruncated = jsonStr.split('{').length !== jsonStr.split('}').length;
       if (isTruncated) {
-        console.log('JSON truncado detectado. Última parte:', lastChars);
         let cutoffPoint = jsonStr.length;
         const lastValidPatterns = [
-          /\}(?=\s*,?\s*$)/g,
-          /\](?=\s*,?\s*$)/g,
-          /"[^"]*"(?=\s*,?\s*$)/g,
-          /\d+(?=\s*,?\s*$)/g,
-          /true|false|null(?=\s*,?\s*$)/g
+          /\}(?=\s*,?\s*$)/g, /\](?=\s*,?\s*$)/g, /"[^"]*"(?=\s*,?\s*$)/g, /\d+(?=\s*,?\s*$)/g, /true|false|null(?=\s*,?\s*$)/g
         ];
         for (let pattern of lastValidPatterns) {
           const matches = [...jsonStr.matchAll(pattern)];
           if (matches.length > 0) {
             const lastMatch = matches[matches.length - 1];
             const possibleCutoff = lastMatch.index + lastMatch[0].length;
-            if (possibleCutoff > cutoffPoint - 100) {
-              cutoffPoint = possibleCutoff;
-              break;
-            }
+            cutoffPoint = possibleCutoff; break;
           }
         }
-        if (cutoffPoint < jsonStr.length) {
-          jsonStr = jsonStr.substring(0, cutoffPoint);
-          console.log('Cortado em posição segura:', cutoffPoint);
-        } else {
+        if (cutoffPoint < jsonStr.length) jsonStr = jsonStr.substring(0, cutoffPoint);
+        else {
           const lastComma = jsonStr.lastIndexOf(',');
-          if (lastComma > jsonStr.length - 100) {
-            jsonStr = jsonStr.substring(0, lastComma);
-            console.log('Cortado na última vírgula');
-          }
+          if (lastComma > -1) jsonStr = jsonStr.substring(0, lastComma);
         }
         const openBraces = (jsonStr.match(/{/g) || []).length;
         const closeBraces = (jsonStr.match(/}/g) || []).length;
@@ -157,15 +142,11 @@
         const closeBrackets = (jsonStr.match(/]/g) || []).length;
         for (let i = 0; i < openBrackets - closeBrackets; i++) jsonStr += ']';
         for (let i = 0; i < openBraces - closeBraces; i++) jsonStr += '}';
-        console.log('Estruturas fechadas. Braces:', openBraces - closeBraces, 'Brackets:', openBrackets - closeBrackets);
       }
       return jsonStr;
     }
 
     function parseMarcoResponse(rawResponse) {
-      console.log('=== INICIANDO PARSE DO JSON ===');
-      console.log('Tamanho da resposta:', rawResponse.length);
-      console.log('Últimos 50 caracteres:', rawResponse.slice(-50));
       try {
         let jsonStr = reconstructTruncatedJSON(rawResponse);
         jsonStr = jsonStr
@@ -175,10 +156,7 @@
           .replace(/['']/g, "'");
         let startIndex = -1;
         const patterns = ['{"marco_logico"', '{ "marco_logico"', '{"', '{'];
-        for (let pattern of patterns) {
-          startIndex = jsonStr.indexOf(pattern);
-          if (startIndex >= 0) break;
-        }
+        for (let pattern of patterns) { startIndex = jsonStr.indexOf(pattern); if (startIndex >= 0) break; }
         if (startIndex > 0) jsonStr = jsonStr.substring(startIndex);
         jsonStr = jsonStr
           .replace(/,(\s*[}\]])/g, '$1')
@@ -186,7 +164,7 @@
           .replace(/":\s*"([^"]*)"([^,}\]]*[}\]])/g, '": "$1"$2');
 
         let parsed;
-        const parseAttempts = [
+        const attempts = [
           () => JSON.parse(jsonStr),
           () => JSON.parse(jsonStr.replace(/\n/g, ' ').replace(/\s+/g, ' ')),
           () => {
@@ -194,58 +172,38 @@
             return Function('"use strict"; return (' + evalStr + ')')();
           },
           () => {
-            const objMatch = jsonStr.match(/"objetivos_especificos"\s*:\s*\[(.*?)\]/s);
-            if (objMatch) {
-              const objetivos = JSON.parse('[' + objMatch[1] + ']');
+            const m = jsonStr.match(/"objetivos_especificos"\s*:\s*\[(.*?)\]/s);
+            if (m) {
+              const objetivos = JSON.parse('[' + m[1] + ']');
               return { marco_logico: { objetivo_geral: "Extraído parcialmente devido a erro no JSON", objetivos_especificos: objetivos } };
             }
-            throw new Error('Não foi possível extrair objetivos');
+            throw new Error('Sem objetivos');
           },
           () => {
-            const objGeralMatch = jsonStr.match(/"objetivo_geral"\s*:\s*"([^"]*)"/);
-            const objetivoGeral = objGeralMatch ? objGeralMatch[1] : "Não foi possível extrair";
-            const titulos = [...jsonStr.matchAll(/"titulo"\s*:\s*"([^"]*)"/g)].map(m => m[1]);
-            const objetivosReconstruidos = titulos.slice(0, 5).map((titulo, i) => ({
-              numero: i + 1, titulo, descricao: "Dados parcialmente recuperados", resultados: []
-            }));
-            return { marco_logico: { objetivo_geral: objetivoGeral, objetivos_especificos: objetivosReconstruidos.length>0?objetivosReconstruidos:[] } };
+            const m = jsonStr.match(/"objetivo_geral"\s*:\s*"([^"]*)"/);
+            const objetivoGeral = m ? m[1] : "Não foi possível extrair";
+            const titulos = [...jsonStr.matchAll(/"titulo"\s*:\s*"([^"]*)"/g)].map(x=>x[1]);
+            const objetivosReconstruidos = titulos.slice(0,5).map((t,i)=>({numero:i+1,titulo:t,descricao:"Dados parcialmente recuperados",resultados:[]}));
+            return { marco_logico: { objetivo_geral: objetivoGeral, objetivos_especificos: objetivosReconstruidos } };
           }
         ];
-        let lastError;
-        for (let i=0;i<parseAttempts.length;i++){
-          try{ parsed=parseAttempts[i](); if(parsed) break; }catch(e){ lastError=e; }
-        }
-        if (!parsed) throw lastError || new Error('Todas as tentativas de parse falharam');
+        let lastErr;
+        for (let i=0;i<attempts.length;i++){ try{ parsed=attempts[i](); break; }catch(e){ lastErr=e; } }
+        if (!parsed) throw lastErr || new Error('Falha no parse');
         if (!parsed.marco_logico) parsed = { marco_logico: parsed };
         if (!parsed.marco_logico.objetivos_especificos) parsed.marco_logico.objetivos_especificos = [];
         if (parsed.marco_logico.objetivo_geral && parsed.marco_logico.objetivo_geral.includes("parcialmente")) {
           statusEl.textContent = '⚠️ Dados parcialmente recuperados devido a resposta truncada';
           statusEl.classList.add('warning');
         }
-        console.log('=== PARSE CONCLUÍDO ===');
         return parsed;
       } catch (error) {
-        console.error('Erro fatal no parse:', error);
-        debugInfo.innerHTML = `<strong>ERRO NO PROCESSAMENTO DO JSON</strong>
-
-${error.message}
-
-<strong>Análise do problema:</strong>
-O JSON parece estar truncado ou mal formatado. 
-Última parte recebida: "${rawResponse.slice(-100)}"
-
-<strong>Possíveis causas:</strong>
-1. Corte por limite do webhook
-2. Timeout na API
-3. Formatação do provedor
-
-<strong>Dados brutos (primeiros 2000 caracteres):</strong>
-${rawResponse.substring(0, 2000)}`;
+        debugInfo.innerHTML = `<strong>ERRO NO PROCESSAMENTO DO JSON</strong>\n\n${error.message}\n\n<strong>Dados brutos (primeiros 2000 caracteres):</strong>\n${rawResponse.substring(0,2000)}`;
         debugInfo.classList.add('show');
-        throw new Error('JSON truncado ou mal formatado. Verifique o debug para mais detalhes.');
+        throw new Error('JSON truncado ou mal formatado. Verifique o debug.');
       }
     }
-    /* ====== FIM DO PARSER ORIGINAL ====== */
+    /* FIM PARSER ORIGINAL */
 
     async function lerPDF(file){
       const buf = await file.arrayBuffer();
@@ -343,7 +301,7 @@ ${rawResponse.substring(0, 2000)}`;
         if(!resp.ok) throw new Error(`Erro HTTP: ${resp.status} ${resp.statusText}`);
         statusEl.textContent='Processando resposta da IA...';
         const txt=await resp.text();
-        const parsed=parseMarcoResponse(txt);  /* JSON preservado */
+        const parsed=parseMarcoResponse(txt);
         statusEl.textContent='Gerando arquivo Excel...';
         gerarXLSX(parsed,nomeProjeto);
         if (!statusEl.classList.contains('warning')) {
@@ -362,105 +320,114 @@ ${rawResponse.substring(0, 2000)}`;
       }
     });
 
-    /* ====== SOMENTE A SAÍDA XLSX FOI REFORMULADA ====== */
+    /* XLSX COM INDICADORES, META E MVs */
     function gerarXLSX(responseData, nomeProjeto) {
       try {
         const marco = responseData.marco_logico || {};
         const objetivos = Array.isArray(marco.objetivos_especificos) ? marco.objetivos_especificos : [];
         const wb = XLSX.utils.book_new();
 
-        const aoa=[];
-        const merges=[];
-        const T=(v)=>sanitizeString(v||'');
+        const aoa = [];
+        const merges = [];
+        const T = (v) => (v==null ? '' : String(v)).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').trim();
+        const J = (arr) => Array.isArray(arr) ? arr.map((x)=>T(x.texto||x.descricao||x)).filter(Boolean).join('; ') : T(arr);
 
-        // Título
+        // Título e objetivo geral
         aoa.push(['Marco Lógico']); merges.push({s:{r:0,c:0},e:{r:0,c:7}});
-        // Objetivo Geral
         aoa.push(['Objetivo Geral', T(marco.objetivo_geral||'')]); merges.push({s:{r:1,c:1},e:{r:1,c:7}});
 
-        objetivos.forEach((obj,idx)=>{
+        objetivos.forEach((obj, idx) => {
+          // Objetivo específico
           aoa.push([`Objetivo Específico ${obj.numero||idx+1}`, T(obj.titulo||obj.descricao||'')]);
           merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:7}});
 
-          // RESULTADOS
-          const startRIndex=aoa.length;
-          aoa.push(['', 'Resultados', 'Indicadores', 'Meios de Verificação','','','','']);
-          const resultados = Array.isArray(obj.resultados)?obj.resultados:[];
-          let linhas=0;
-          if(resultados.length===0){
-            aoa.push(['', 'Sem resultados definidos','','','','','','']); linhas=1;
-          }else{
-            resultados.forEach(res=>{
-              const inds=Array.isArray(res.indicadores)?res.indicadores:[];
-              const mvs =Array.isArray(res.meios_verificacao)?res.meios_verificacao:[];
-              const max = Math.max(1, inds.length, mvs.length);
-              for(let i=0;i<max;i++){
-                const ind=inds[i]||{}, mv=mvs[i]||{};
+          // Cabeçalho resultados
+          const startRIndex = aoa.length;
+          aoa.push(['', 'Resultados', 'Indicadores', 'Meta', 'Meios de Verificação', '', '', '']);
+
+          const resultados = Array.isArray(obj.resultados) ? obj.resultados : [];
+          let linhas = 0;
+
+          if (resultados.length === 0) {
+            aoa.push(['', 'Sem resultados definidos', '', '', '', '', '', '']);
+            linhas = 1;
+          } else {
+            resultados.forEach((res) => {
+              const inds = Array.isArray(res.indicadores) ? res.indicadores : [];
+              const movs = Array.isArray(res.meios_verificacao) ? res.meios_verificacao : [];
+              const max = Math.max(1, inds.length, movs.length);
+              for (let i = 0; i < max; i++) {
+                const ind = inds[i] || {};
+                const mov = movs[i] || {};
+                const meta = ind.meta || res.meta || '';
+                const mvFinal = ind.meios_verificacao?.length ? ind.meios_verificacao : (movs.length ? movs : res.meios_verificacao);
                 aoa.push([
                   '',
-                  i===0?T(res.titulo||res.descricao||''):'',
+                  i===0 ? T(res.titulo||res.descricao||'') : '',
                   T(ind.texto||ind.descricao||''),
-                  T(mv.texto||mv.descricao||''),
-                  '','','',''
+                  T(meta),
+                  J(mvFinal),
+                  '', '', ''
                 ]);
                 linhas++;
               }
             });
           }
-          if(linhas>0){
-            aoa[startRIndex+1][0]=`RESULTADOS OBJETIVO ${obj.numero||idx+1}`;
+
+          // Rótulo lateral
+          if (linhas > 0) {
+            aoa[startRIndex+1][0] = `RESULTADOS OBJETIVO ${obj.numero||idx+1}`;
             merges.push({s:{r:startRIndex+1,c:0},e:{r:startRIndex+linhas,c:0}});
-          }else{
+          } else {
             aoa.push([`RESULTADOS OBJETIVO ${obj.numero||idx+1}`,'','','','','','','']);
           }
 
-          // ATIVIDADES
-          aoa.push(['', 'Atividades', 'Lógica de Intervenção', 'Prazo e/ou periodicidade','','','','']);
-          const atividades = Array.isArray(obj.atividades)?obj.atividades:[];
-          if(atividades.length===0){
-            aoa.push(['', 'Sem atividades definidas','','','','','','']);
-          }else{
-            atividades.forEach(atv=>{
+          // Cabeçalho atividades
+          aoa.push(['', 'Atividades', 'Lógica de Intervenção', 'Prazo e/ou periodicidade', '', '', '', '']);
+          const atividades = Array.isArray(obj.atividades) ? obj.atividades : [];
+          if (atividades.length === 0) {
+            aoa.push(['', 'Sem atividades definidas', '', '', '', '', '', '']);
+          } else {
+            atividades.forEach((atv) => {
               aoa.push([
                 '',
                 T(atv.titulo||atv.descricao||''),
                 T(atv.logica_intervencao||atv.logica||''),
                 T(atv.prazo||atv.periodicidade||''),
-                '','','',''
+                '', '', '', ''
               ]);
             });
           }
         });
 
-        const ws=XLSX.utils.aoa_to_sheet(aoa);
-        ws['!cols']=[
-          {wch:28},{wch:32},{wch:34},{wch:28},{wch:4},{wch:4},{wch:4},{wch:4}
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        ws['!cols'] = [
+          { wch: 28 }, { wch: 36 }, { wch: 36 }, { wch: 16 }, { wch: 34 }, { wch: 4 }, { wch: 4 }, { wch: 4 }
         ];
-        ws['!merges']=merges;
-        XLSX.utils.book_append_sheet(wb,ws,'Marco Lógico');
+        ws['!merges'] = merges;
+        XLSX.utils.book_append_sheet(wb, ws, 'Marco Lógico');
 
         // Resumo
-        const resumo=[
-          ['MARCO LÓGICO - RESUMO'],[''],
+        const resumo = [
+          ['MARCO LÓGICO - RESUMO'], [''],
           ['Nome do Projeto', nomeProjeto||''],
           ['Objetivo Geral', T(marco.objetivo_geral||'')],
           ['Data', new Date().toLocaleDateString('pt-BR')]
         ];
-        const wsR=XLSX.utils.aoa_to_sheet(resumo);
-        wsR['!cols']=[{wch:20},{wch:70}];
-        XLSX.utils.book_append_sheet(wb,wsR,'Resumo');
+        const wsR = XLSX.utils.aoa_to_sheet(resumo);
+        wsR['!cols'] = [{ wch: 20 }, { wch: 70 }];
+        XLSX.utils.book_append_sheet(wb, wsR, 'Resumo');
 
-        const ts=Date.now();
-        const nomeSeguro=(nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').substring(0,30);
-        XLSX.writeFile(wb,`Marco_Logico_${nomeSeguro}_${ts}.xlsx`);
+        const ts = Date.now();
+        const nomeSeguro = (nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').substring(0,30);
+        XLSX.writeFile(wb, `Marco_Logico_${nomeSeguro}_${ts}.xlsx`);
       } catch (error) {
-        console.error('Erro ao gerar XLSX:', error);
         throw new Error('Erro ao gerar Excel: ' + error.message);
       }
     }
-    /* ====== FIM DA SAÍDA XLSX ====== */
   </script>
 </body>
 </html>
+
 
 
