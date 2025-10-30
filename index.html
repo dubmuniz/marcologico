@@ -91,89 +91,121 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // Parser melhorado para extrair JSON da resposta
+    // Função ultra-agressiva para extrair JSON
     function extractMarcoLogico(raw) {
       if (!raw) throw new Error('Resposta vazia');
       
       try {
         let txt = String(raw).trim();
         
-        console.log('=== Processando Resposta ===');
-        console.log('Tamanho original:', txt.length);
-        console.log('Primeiros 200 chars:', txt.substring(0, 200));
+        console.log('=== LIMPEZA AGRESSIVA ===');
+        console.log('Resposta original (primeiros 500):', txt.substring(0, 500));
         
-        // Remove marcadores de código markdown (```json, ```, etc)
-        txt = txt.replace(/^```json\s*/i, '');
-        txt = txt.replace(/^```\s*/, '');
-        txt = txt.replace(/\s*```$/, '');
+        // Estratégia 1: Tenta encontrar JSON válido em qualquer lugar da string
+        // Procura por padrão {"marco_logico": em qualquer lugar
+        const jsonPattern = /\{"marco_logico"\s*:\s*\{[\s\S]*?\}\s*\}/;
+        const match = txt.match(jsonPattern);
         
-        // Remove qualquer texto antes do primeiro {
-        const firstBrace = txt.indexOf('{');
-        if (firstBrace > 0) {
-          console.log('Removendo', firstBrace, 'chars do início');
-          txt = txt.substring(firstBrace);
+        if (match) {
+          console.log('✓ Padrão JSON encontrado via regex');
+          const cleaned = match[0];
+          const obj = JSON.parse(cleaned);
+          if (obj.marco_logico) return obj;
         }
         
-        // Remove qualquer texto depois do último }
-        const lastBrace = txt.lastIndexOf('}');
-        if (lastBrace > -1 && lastBrace < txt.length - 1) {
-          console.log('Removendo', txt.length - lastBrace - 1, 'chars do final');
-          txt = txt.substring(0, lastBrace + 1);
+        // Estratégia 2: Remove TUDO que não seja JSON
+        // Remove qualquer coisa antes do primeiro {
+        let startIdx = txt.indexOf('{');
+        if (startIdx === -1) {
+          // Tenta encontrar após remover markdown
+          txt = txt.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '');
+          startIdx = txt.indexOf('{');
         }
         
-        // Limpa espaços em branco extras
-        txt = txt.trim();
-        
-        console.log('Após limpeza (primeiros 200 chars):', txt.substring(0, 200));
-        
-        // Tenta fazer parse do JSON
-        const obj = JSON.parse(txt);
-        
-        console.log('Parse bem-sucedido! Keys:', Object.keys(obj));
-        
-        // Valida estrutura esperada
-        if (obj.marco_logico) {
-          console.log('✓ Estrutura correta encontrada');
-          return obj;
-        }
-        
-        // Se veio sem wrapper, adiciona
-        if (obj.objetivo_geral && obj.objetivos_especificos) {
-          console.log('✓ Estrutura sem wrapper, adicionando...');
-          return { marco_logico: obj };
-        }
-        
-        throw new Error('Estrutura JSON inválida');
-        
-      } catch (e) {
-        console.error('Erro ao processar JSON:', e.message);
-        console.error('Resposta completa:', raw);
-        
-        // Tenta uma última limpeza mais agressiva
-        try {
-          // Remove TUDO que não seja JSON válido
-          let cleaned = String(raw);
+        if (startIdx > -1) {
+          // Conta chaves para encontrar o JSON completo
+          let depth = 0;
+          let endIdx = -1;
+          let inString = false;
+          let escape = false;
           
-          // Remove múltiplas variações de markdown
-          cleaned = cleaned.replace(/```[a-z]*\n?/gi, '');
-          cleaned = cleaned.replace(/```\n?/g, '');
-          
-          // Extrai apenas o conteúdo entre primeiro { e último }
-          const match = cleaned.match(/\{[\s\S]*\}/);
-          if (match) {
-            console.log('Tentativa final com regex match...');
-            const parsed = JSON.parse(match[0]);
+          for (let i = startIdx; i < txt.length; i++) {
+            const char = txt[i];
             
-            if (parsed.marco_logico) return parsed;
-            if (parsed.objetivo_geral && parsed.objetivos_especificos) {
-              return { marco_logico: parsed };
+            if (escape) {
+              escape = false;
+              continue;
+            }
+            
+            if (char === '\\') {
+              escape = true;
+              continue;
+            }
+            
+            if (char === '"' && !escape) {
+              inString = !inString;
+              continue;
+            }
+            
+            if (!inString) {
+              if (char === '{') depth++;
+              if (char === '}') {
+                depth--;
+                if (depth === 0) {
+                  endIdx = i;
+                  break;
+                }
+              }
             }
           }
-        } catch (e2) {
-          console.error('Tentativa final falhou:', e2.message);
+          
+          if (endIdx > -1) {
+            const jsonStr = txt.substring(startIdx, endIdx + 1);
+            console.log('✓ JSON extraído por contagem de chaves');
+            console.log('JSON limpo (primeiros 200):', jsonStr.substring(0, 200));
+            
+            const obj = JSON.parse(jsonStr);
+            if (obj.marco_logico) return obj;
+            if (obj.objetivo_geral && obj.objetivos_especificos) {
+              return { marco_logico: obj };
+            }
+          }
         }
         
-        throw new Error('Não foi possível processar o JSON: ' + e.message);
+        // Estratégia 3: Força bruta - remove caracteres problemáticos
+        console.log('Tentando força bruta...');
+        
+        // Remove todos os caracteres não-ASCII e markdown
+        txt = txt.replace(/[^\x20-\x7E\n]/g, ''); // Mantém apenas ASCII imprimível
+        txt = txt.replace(/```[^\n]*\n?/g, '');
+        txt = txt.replace(/\n+/g, ' ');
+        txt = txt.trim();
+        
+        // Tenta encontrar e extrair JSON novamente
+        const braceStart = txt.indexOf('{');
+        const braceEnd = txt.lastIndexOf('}');
+        
+        if (braceStart > -1 && braceEnd > braceStart) {
+          const possibleJson = txt.substring(braceStart, braceEnd + 1);
+          try {
+            const obj = JSON.parse(possibleJson);
+            if (obj.marco_logico || (obj.objetivo_geral && obj.objetivos_especificos)) {
+              console.log('✓ JSON extraído por força bruta');
+              return obj.marco_logico ? obj : { marco_logico: obj };
+            }
+          } catch (e) {
+            console.error('Força bruta falhou:', e.message);
+          }
+        }
+        
+        throw new Error('Nenhuma estratégia conseguiu extrair o JSON');
+        
+      } catch (e) {
+        console.error('❌ Todas as tentativas falharam:', e.message);
+        console.error('Resposta completa recebida:', raw);
+        
+        // Última tentativa: pede pro usuário verificar o webhook
+        throw new Error('Não foi possível processar a resposta. Verifique se o webhook está configurado para retornar apenas JSON puro, sem markdown ou texto adicional.');
       }
     }
 
@@ -283,26 +315,32 @@
         
         const txt=await r.text();
         
-        console.log('=== RESPOSTA DA API ===');
-        console.log('Status:', r.status);
-        console.log('Tamanho resposta:', txt.length);
-        console.log('Resposta completa:', txt);
+        console.log('=== DIAGNÓSTICO COMPLETO ===');
+        console.log('Status HTTP:', r.status);
+        console.log('Tamanho resposta:', txt.length, 'bytes');
+        console.log('Primeiros 50 caracteres:', txt.substring(0, 50));
+        console.log('Começa com {?', txt.trim().startsWith('{'));
+        console.log('Contém "marco_logico"?', txt.includes('marco_logico'));
+        console.log('Contém ```?', txt.includes('```'));
+        console.log('=========================');
         
         const marcoLogico=extractMarcoLogico(txt);
         
-        console.log('=== MARCO LÓGICO EXTRAÍDO ===');
-        console.log('Objetivo Geral:', marcoLogico.marco_logico?.objetivo_geral);
-        console.log('Número de objetivos:', marcoLogico.marco_logico?.objetivos_especificos?.length);
-
+        console.log('✅ Marco lógico processado com sucesso!');
         statusEl.textContent='✅ Marco Lógico gerado, preparando XLSX...'; 
         statusEl.classList.add('success');
         
         gerarXLSX(marcoLogico, nomeProjeto);
 
       }catch(err){
-        console.error('Erro completo:', err);
+        console.error('❌ Erro:', err);
         statusEl.textContent='❌ '+err.message; 
         statusEl.classList.add('error');
+        
+        // Sugestão ao usuário
+        if(err.message.includes('webhook')) {
+          statusEl.textContent += ' | Use um dos arquivos de configuração do webhook fornecidos.';
+        }
       }finally{
         submitBtn.disabled=false;
       }
