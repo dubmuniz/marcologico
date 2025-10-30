@@ -32,7 +32,7 @@
     .status{min-height:22px;color:var(--muted);margin:12px 0 0;font-size:14px}
     .status.error{color:#d32f2f}
     .status.success{color:#1E7E34}
-    .debug-info{background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto;display:none}
+    .debug-info{background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;font-size:12px;font-family:monospace;max-height:300px;overflow-y:auto;display:none;white-space:pre-wrap;word-break:break-all}
     .debug-info.show{display:block}
   </style>
 </head>
@@ -111,7 +111,7 @@
         .trim();
     }
 
-    // Função para preparar objetivos para envio (formato one-line)
+    // Função para preparar objetivos para envio
     function objetivosToOneLine(arr) {
       if (!Array.isArray(arr)) return '';
       return arr.map(o => {
@@ -121,51 +121,74 @@
       }).join(' || ');
     }
 
-    // Parser JSON robusto e simplificado
+    // Função super robusta para corrigir e parsear JSON
     function parseMarcoResponse(rawResponse) {
+      console.log('=== INICIANDO PARSE DO JSON ===');
+      console.log('Tamanho da resposta:', rawResponse.length);
+      console.log('Primeiros 500 chars:', rawResponse.substring(0, 500));
+      
       try {
-        // Log para debug
-        console.log('Resposta bruta recebida:', rawResponse.substring(0, 500) + '...');
-        
+        // Etapa 1: Limpar a resposta
         let jsonStr = String(rawResponse || '').trim();
         
-        // Remove marcadores de código se existirem
-        jsonStr = jsonStr.replace(/^```json\s*/i, '');
-        jsonStr = jsonStr.replace(/```\s*$/i, '');
-        jsonStr = jsonStr.replace(/^```\s*/i, '');
+        // Remove marcadores de código
+        jsonStr = jsonStr.replace(/^```json\s*/gi, '');
+        jsonStr = jsonStr.replace(/^```\s*/gi, '');
+        jsonStr = jsonStr.replace(/```\s*$/gi, '');
         
-        // Remove BOM e caracteres invisíveis problemáticos
+        // Remove BOM e caracteres problemáticos
         jsonStr = jsonStr.replace(/\uFEFF/g, '');
-        jsonStr = jsonStr.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '');
+        jsonStr = jsonStr.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
         
-        // Normaliza aspas inteligentes para aspas normais
-        jsonStr = jsonStr.replace(/[""]/g, '"');
-        jsonStr = jsonStr.replace(/['']/g, "'");
+        // Etapa 2: Encontrar e extrair o JSON
+        let startIndex = -1;
+        let searchPatterns = [
+          '{"marco_logico"',
+          '{ "marco_logico"',
+          '{\n"marco_logico"',
+          '{"'
+        ];
         
-        // Tenta encontrar o início do JSON
-        let startIndex = jsonStr.indexOf('{"marco_logico"');
+        for (let pattern of searchPatterns) {
+          startIndex = jsonStr.indexOf(pattern);
+          if (startIndex >= 0) break;
+        }
+        
         if (startIndex === -1) {
-          startIndex = jsonStr.indexOf('{"');
-          if (startIndex === -1) {
-            startIndex = jsonStr.indexOf('{');
-          }
+          // Tenta encontrar qualquer {
+          startIndex = jsonStr.indexOf('{');
         }
         
         if (startIndex === -1) {
           throw new Error('Não foi possível encontrar o início do JSON');
         }
         
-        // Extrai apenas a parte JSON
         jsonStr = jsonStr.substring(startIndex);
+        console.log('JSON após extração inicial:', jsonStr.substring(0, 200));
         
-        // Encontra o fim do JSON contando chaves
-        let braceCount = 0;
-        let endIndex = -1;
+        // Etapa 3: Corrigir problemas comuns ANTES de tentar extrair
+        
+        // Corrige aspas inteligentes
+        jsonStr = jsonStr.replace(/[""]/g, '"');
+        jsonStr = jsonStr.replace(/['']/g, "'");
+        
+        // Corrige escapes problemáticos
+        jsonStr = jsonStr.replace(/\\\\/g, '\\');
+        jsonStr = jsonStr.replace(/\\"/g, '"');
+        
+        // Etapa 4: Extrair JSON balanceado com correção de strings não terminadas
+        let result = '';
+        let depth = 0;
         let inString = false;
         let escapeNext = false;
+        let lastStringStart = -1;
         
         for (let i = 0; i < jsonStr.length; i++) {
           const char = jsonStr[i];
+          const nextChar = i < jsonStr.length - 1 ? jsonStr[i + 1] : '';
+          
+          // Adiciona o caractere ao resultado
+          result += char;
           
           if (escapeNext) {
             escapeNext = false;
@@ -178,90 +201,158 @@
           }
           
           if (char === '"' && !escapeNext) {
-            inString = !inString;
+            if (!inString) {
+              inString = true;
+              lastStringStart = i;
+            } else {
+              inString = false;
+              lastStringStart = -1;
+            }
             continue;
           }
           
           if (!inString) {
-            if (char === '{') {
-              braceCount++;
-            } else if (char === '}') {
-              braceCount--;
-              if (braceCount === 0) {
-                endIndex = i + 1;
+            if (char === '{' || char === '[') {
+              depth++;
+            } else if (char === '}' || char === ']') {
+              depth--;
+              if (depth === 0 && char === '}') {
+                // Encontramos o fim do JSON principal
                 break;
               }
             }
           }
         }
         
-        if (endIndex > 0) {
-          jsonStr = jsonStr.substring(0, endIndex);
+        // Se ainda estamos dentro de uma string, fechá-la
+        if (inString && lastStringStart > -1) {
+          console.log('String não terminada detectada, fechando...');
+          result += '"';
         }
         
-        // Corrige problemas comuns de formatação JSON
+        // Se ainda temos estruturas abertas, fechá-las
+        while (depth > 0) {
+          result += '}';
+          depth--;
+        }
         
-        // 1. Remove vírgulas extras antes de fechamento
+        jsonStr = result;
+        console.log('JSON após balanceamento:', jsonStr.substring(0, 200));
+        
+        // Etapa 5: Aplicar correções finais de formatação
+        
+        // Remove vírgulas antes de fechamento
         jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
         
-        // 2. Adiciona vírgulas faltantes entre elementos
-        jsonStr = jsonStr.replace(/}(\s*{)/g, '},$1');
-        jsonStr = jsonStr.replace(/](\s*\[)/g, '],$1');
+        // Adiciona vírgulas entre elementos se necessário
+        jsonStr = jsonStr.replace(/}(\s*")/g, '},$1');
+        jsonStr = jsonStr.replace(/](\s*")/g, '],$1');
         jsonStr = jsonStr.replace(/"(\s*"[^:]*":)/g, '",$1');
         
-        // 3. Corrige quebras de linha dentro de strings (substituindo por espaço)
-        jsonStr = jsonStr.replace(/"([^"]*)\n([^"]*)":/g, '"$1 $2":');
-        jsonStr = jsonStr.replace(/:\s*"([^"]*)\n([^"]*)"/g, ': "$1 $2"');
-        
-        // 4. Remove caracteres de controle dentro de valores string
-        jsonStr = jsonStr.replace(/"([^"]*)"/g, function(match, p1) {
-          return '"' + p1.replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim() + '"';
+        // Remove quebras de linha dentro de valores
+        jsonStr = jsonStr.replace(/"([^"]*)":/g, function(match, key) {
+          return '"' + key.replace(/[\n\r\t]/g, ' ').trim() + '":';
         });
         
-        // Log do JSON processado para debug
-        console.log('JSON processado (primeiros 500 chars):', jsonStr.substring(0, 500) + '...');
+        jsonStr = jsonStr.replace(/:\s*"([^"]*)"/g, function(match, value) {
+          return ': "' + value.replace(/[\n\r\t]/g, ' ').trim() + '"';
+        });
         
-        // Tenta fazer o parse
-        const parsed = JSON.parse(jsonStr);
+        console.log('JSON final para parse:', jsonStr.substring(0, 300));
         
-        // Valida estrutura básica
+        // Etapa 6: Tentar fazer o parse
+        let parsed;
+        try {
+          parsed = JSON.parse(jsonStr);
+        } catch (parseError) {
+          console.error('Erro no JSON.parse:', parseError);
+          console.log('Tentando correção adicional...');
+          
+          // Tenta uma correção mais agressiva
+          jsonStr = jsonStr
+            .replace(/([^\\])"([^"]*)":/g, '$1"$2":') // Garante que keys estão corretas
+            .replace(/:\s*"([^"]*)$/g, ': "$1"') // Fecha strings não terminadas no final
+            .replace(/,\s*}/g, '}') // Remove vírgulas finais
+            .replace(/,\s*]/g, ']'); // Remove vírgulas finais em arrays
+          
+          // Tenta novamente
+          try {
+            parsed = JSON.parse(jsonStr);
+          } catch (secondError) {
+            // Última tentativa: usar eval (perigoso, mas controlado)
+            console.log('Tentando eval como última opção...');
+            try {
+              // Sanitiza para eval seguro
+              const safeEval = jsonStr
+                .replace(/undefined/g, 'null')
+                .replace(/(\w+):/g, '"$1":'); // Garante que todas as keys têm aspas
+              
+              parsed = Function('"use strict"; return (' + safeEval + ')')();
+            } catch (evalError) {
+              console.error('Todas as tentativas falharam');
+              console.log('JSON problemático:', jsonStr.substring(0, 1000));
+              throw new Error(`Não foi possível processar o JSON após múltiplas tentativas. Erro na posição aproximada: ${parseError.message}`);
+            }
+          }
+        }
+        
+        // Etapa 7: Validar estrutura
         if (!parsed || typeof parsed !== 'object') {
           throw new Error('Resposta não é um objeto válido');
         }
         
         if (!parsed.marco_logico) {
+          console.log('Estrutura recebida:', JSON.stringify(parsed).substring(0, 500));
           throw new Error('Resposta não contém campo marco_logico');
         }
         
+        console.log('=== PARSE CONCLUÍDO COM SUCESSO ===');
         return parsed;
         
       } catch (error) {
-        console.error('Erro no parseMarcoResponse:', error);
-        console.error('Stack trace:', error.stack);
+        console.error('Erro fatal no parse:', error);
         
-        // Tenta uma abordagem alternativa mais agressiva
-        try {
-          console.log('Tentando parser alternativo...');
-          
-          // Remove tudo que não seja JSON
-          let cleanJson = rawResponse
-            .replace(/^[^{]*/, '') // Remove tudo antes do primeiro {
-            .replace(/[^}]*$/, '') // Remove tudo depois do último }
-            .trim();
-          
-          // Tenta avaliar como JavaScript (mais permissivo que JSON.parse)
-          const alternativeParsed = Function('"use strict"; return (' + cleanJson + ')')();
-          
-          if (alternativeParsed && alternativeParsed.marco_logico) {
-            console.log('Parser alternativo funcionou!');
-            return alternativeParsed;
-          }
-        } catch (altError) {
-          console.error('Parser alternativo também falhou:', altError);
-        }
+        // Salva informações de debug
+        debugInfo.innerHTML = `
+<strong>ERRO AO PROCESSAR RESPOSTA</strong>
+
+Erro: ${error.message}
+
+<strong>Resposta Original (primeiros 1000 caracteres):</strong>
+${rawResponse.substring(0, 1000)}
+
+<strong>Dica:</strong> Verifique se o webhook do Make está retornando um JSON válido.
+O formato esperado é:
+{
+  "marco_logico": {
+    "objetivo_geral": "...",
+    "objetivos_especificos": [...]
+  }
+}
+        `;
+        debugInfo.classList.add('show');
         
-        throw new Error(`Erro ao processar JSON: ${error.message}`);
+        throw error;
       }
+    }
+
+    // Função alternativa de parse mais simples (fallback)
+    function simpleFallbackParse(rawResponse) {
+      try {
+        // Tenta extrair apenas a estrutura marco_logico de forma bem básica
+        const regex = /"marco_logico"\s*:\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/;
+        const match = rawResponse.match(regex);
+        
+        if (match) {
+          const marcoContent = '{' + match[1] + '}';
+          return {
+            marco_logico: JSON.parse(marcoContent)
+          };
+        }
+      } catch (e) {
+        console.error('Fallback parse também falhou:', e);
+      }
+      return null;
     }
 
     // Função para ler PDF
@@ -305,6 +396,7 @@
       
       statusEl.textContent = 'Lendo arquivo...';
       statusEl.classList.remove('error', 'success');
+      debugInfo.classList.remove('show');
       
       try {
         const fileName = file.name.toLowerCase();
@@ -363,6 +455,10 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
+      // Limpa debug anterior
+      debugInfo.classList.remove('show');
+      debugInfo.innerHTML = '';
+      
       // Validações
       if (!editalConteudo) {
         statusEl.textContent = 'Por favor, carregue o arquivo do edital';
@@ -412,14 +508,13 @@
         submitBtn.disabled = true;
         statusEl.textContent = 'Enviando dados para processamento...';
         statusEl.classList.remove('error', 'success');
-        debugInfo.classList.remove('show');
         
         // Envia request
         const response = await fetch(WEBHOOK_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json, text/plain'
           },
           body: JSON.stringify(payload)
         });
@@ -431,12 +526,20 @@
         statusEl.textContent = 'Processando resposta da IA...';
         
         const responseText = await response.text();
+        console.log('Resposta recebida. Tamanho:', responseText.length);
         
-        // Debug: mostra parte da resposta
-        console.log('Resposta recebida (primeiros 1000 chars):', responseText.substring(0, 1000));
-        
-        // Parse da resposta
-        const parsedResponse = parseMarcoResponse(responseText);
+        // Tenta o parse principal
+        let parsedResponse;
+        try {
+          parsedResponse = parseMarcoResponse(responseText);
+        } catch (parseError) {
+          console.error('Parse principal falhou, tentando fallback...');
+          parsedResponse = simpleFallbackParse(responseText);
+          
+          if (!parsedResponse) {
+            throw parseError;
+          }
+        }
         
         // Gera o arquivo XLSX
         statusEl.textContent = 'Gerando arquivo Excel...';
@@ -450,15 +553,16 @@
         statusEl.textContent = `Erro: ${error.message}`;
         statusEl.classList.add('error');
         
-        // Mostra informações de debug
-        debugInfo.innerHTML = `<strong>Detalhes do erro:</strong><br>${error.stack || error.message}`;
-        debugInfo.classList.add('show');
+        if (!debugInfo.classList.contains('show')) {
+          debugInfo.innerHTML = `<strong>Detalhes do erro:</strong>\n${error.stack || error.message}`;
+          debugInfo.classList.add('show');
+        }
       } finally {
         submitBtn.disabled = false;
       }
     });
 
-    // Função para gerar XLSX
+    // Função para gerar XLSX com tratamento de erros robusto
     function gerarXLSX(responseData, nomeProjeto) {
       try {
         const marco = responseData.marco_logico || {};
@@ -467,7 +571,7 @@
         // Cria novo workbook
         const wb = XLSX.utils.book_new();
         
-        // Calcula estatísticas
+        // Calcula estatísticas com valores seguros
         let totalResultados = 0;
         let totalIndicadores = 0;
         let totalAtividades = 0;
@@ -489,8 +593,8 @@
           ['MARCO LÓGICO - RESUMO EXECUTIVO'],
           [''],
           ['Informações do Projeto'],
-          ['Nome do Projeto:', nomeProjeto],
-          ['Objetivo Geral:', marco.objetivo_geral || 'Não especificado'],
+          ['Nome do Projeto:', nomeProjeto || 'Não especificado'],
+          ['Objetivo Geral:', sanitizeString(marco.objetivo_geral || 'Não especificado')],
           ['Data de Geração:', new Date().toLocaleDateString('pt-BR')],
           [''],
           ['Estatísticas do Marco Lógico'],
@@ -503,8 +607,6 @@
         ];
         
         const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
-        
-        // Ajusta larguras das colunas
         wsResumo['!cols'] = [
           { wch: 30 },
           { wch: 60 }
@@ -517,42 +619,44 @@
           ['OBJETIVO ESPECÍFICO', 'RESULTADO ESPERADO', 'INDICADOR', 'META', 'ATIVIDADE', 'LÓGICA DE INTERVENÇÃO', 'PRAZO', 'MEIOS DE VERIFICAÇÃO']
         ];
         
-        objetivos.forEach((objetivo, objIndex) => {
-          const tituloObjetivo = sanitizeString(objetivo.titulo || `Objetivo ${objIndex + 1}`);
-          const resultados = Array.isArray(objetivo.resultados) ? objetivo.resultados : [];
-          
-          if (resultados.length === 0) {
-            marcoData.push([tituloObjetivo, '', '', '', '', '', '', '']);
-          } else {
-            resultados.forEach((resultado, resIndex) => {
-              const tituloResultado = sanitizeString(resultado.titulo || `Resultado ${resIndex + 1}`);
-              const indicadores = Array.isArray(resultado.indicadores) ? resultado.indicadores : [];
-              const atividades = Array.isArray(resultado.atividades) ? resultado.atividades : [];
-              
-              const maxRows = Math.max(indicadores.length, atividades.length, 1);
-              
-              for (let i = 0; i < maxRows; i++) {
-                const indicador = indicadores[i] || {};
-                const atividade = atividades[i] || {};
+        if (objetivos.length === 0) {
+          marcoData.push(['Nenhum objetivo específico encontrado', '', '', '', '', '', '', '']);
+        } else {
+          objetivos.forEach((objetivo, objIndex) => {
+            const tituloObjetivo = sanitizeString(objetivo.titulo || `Objetivo ${objIndex + 1}`);
+            const resultados = Array.isArray(objetivo.resultados) ? objetivo.resultados : [];
+            
+            if (resultados.length === 0) {
+              marcoData.push([tituloObjetivo, 'Sem resultados definidos', '', '', '', '', '', '']);
+            } else {
+              resultados.forEach((resultado, resIndex) => {
+                const tituloResultado = sanitizeString(resultado.titulo || `Resultado ${resIndex + 1}`);
+                const indicadores = Array.isArray(resultado.indicadores) ? resultado.indicadores : [];
+                const atividades = Array.isArray(resultado.atividades) ? resultado.atividades : [];
                 
-                marcoData.push([
-                  i === 0 ? tituloObjetivo : '',
-                  i === 0 ? tituloResultado : '',
-                  sanitizeString(indicador.texto || indicador.descricao || ''),
-                  sanitizeString(indicador.meta || ''),
-                  sanitizeString(atividade.descricao || atividade.titulo || ''),
-                  sanitizeString(atividade.logica_intervencao || ''),
-                  sanitizeString(atividade.prazo || ''),
-                  sanitizeString(atividade.meios_verificacao || indicador.meios_verificacao || '')
-                ]);
-              }
-            });
-          }
-        });
+                const maxRows = Math.max(indicadores.length, atividades.length, 1);
+                
+                for (let i = 0; i < maxRows; i++) {
+                  const indicador = indicadores[i] || {};
+                  const atividade = atividades[i] || {};
+                  
+                  marcoData.push([
+                    i === 0 ? tituloObjetivo : '',
+                    i === 0 ? tituloResultado : '',
+                    sanitizeString(indicador.texto || indicador.descricao || ''),
+                    sanitizeString(indicador.meta || ''),
+                    sanitizeString(atividade.descricao || atividade.titulo || ''),
+                    sanitizeString(atividade.logica_intervencao || ''),
+                    sanitizeString(atividade.prazo || ''),
+                    sanitizeString(atividade.meios_verificacao || indicador.meios_verificacao || '')
+                  ]);
+                }
+              });
+            }
+          });
+        }
         
         const wsMarco = XLSX.utils.aoa_to_sheet(marcoData);
-        
-        // Ajusta larguras das colunas para melhor visualização
         wsMarco['!cols'] = [
           { wch: 25 }, // Objetivo
           { wch: 25 }, // Resultado
@@ -566,39 +670,10 @@
         
         XLSX.utils.book_append_sheet(wb, wsMarco, 'Marco Lógico');
         
-        // Aba 3: Detalhamento por Objetivo
-        objetivos.forEach((objetivo, index) => {
-          const sheetName = `Objetivo ${index + 1}`;
-          const objData = [
-            [`OBJETIVO ESPECÍFICO ${index + 1}`],
-            [''],
-            ['Título:', sanitizeString(objetivo.titulo || '')],
-            ['Descrição:', sanitizeString(objetivo.descricao || '')],
-            [''],
-            ['RESULTADOS E ATIVIDADES'],
-            ['']
-          ];
-          
-          const resultados = Array.isArray(objetivo.resultados) ? objetivo.resultados : [];
-          resultados.forEach((resultado, resIndex) => {
-            objData.push([`Resultado ${resIndex + 1}: ${sanitizeString(resultado.titulo || '')}`]);
-            
-            const atividades = Array.isArray(resultado.atividades) ? resultado.atividades : [];
-            atividades.forEach((atividade, atvIndex) => {
-              objData.push([`  → Atividade ${resIndex + 1}.${atvIndex + 1}: ${sanitizeString(atividade.descricao || '')}`]);
-            });
-            
-            objData.push(['']);
-          });
-          
-          const wsObj = XLSX.utils.aoa_to_sheet(objData);
-          wsObj['!cols'] = [{ wch: 80 }];
-          
-          XLSX.utils.book_append_sheet(wb, wsObj, sheetName.substring(0, 31)); // Excel limita nome a 31 chars
-        });
-        
-        // Gera nome do arquivo
-        const nomeArquivo = `Marco_Logico_${nomeProjeto.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.xlsx`;
+        // Gera nome único do arquivo
+        const timestamp = new Date().getTime();
+        const nomeArquivoSeguro = nomeProjeto.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+        const nomeArquivo = `Marco_Logico_${nomeArquivoSeguro}_${timestamp}.xlsx`;
         
         // Salva o arquivo
         XLSX.writeFile(wb, nomeArquivo);
@@ -609,15 +684,6 @@
         console.error('Erro ao gerar XLSX:', error);
         throw new Error('Erro ao gerar arquivo Excel: ' + error.message);
       }
-    }
-
-    // Adiciona listener para debug em desenvolvimento
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      window.addEventListener('error', (e) => {
-        console.error('Erro global capturado:', e);
-        debugInfo.innerHTML += `<br>Erro: ${e.message}`;
-        debugInfo.classList.add('show');
-      });
     }
   </script>
 </body>
