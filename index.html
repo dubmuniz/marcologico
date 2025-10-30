@@ -32,6 +32,7 @@
     .status{min-height:22px;color:var(--muted);margin:12px 0 0;font-size:14px}
     .status.error{color:#d32f2f}
     .status.success{color:#1E7E34}
+    .status.warning{color:#ff9800}
     .debug-info{background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;font-size:12px;font-family:monospace;max-height:400px;overflow-y:auto;display:none;white-space:pre-wrap;word-break:break-all}
     .debug-info.show{display:block}
   </style>
@@ -122,352 +123,250 @@
     }
 
     /**
-     * Parser JSON completamente reescrito - corrige caractere por caractere
+     * Função para reconstruir JSON truncado/cortado
      */
-    function deepFixJSON(jsonStr) {
-      console.log('=== DEEP FIX JSON INICIADO ===');
+    function reconstructTruncatedJSON(jsonStr) {
+      console.log('=== RECONSTRUINDO JSON TRUNCADO ===');
       
-      let result = [];
-      let i = 0;
-      let inString = false;
-      let escapeNext = false;
-      let depth = 0;
-      let structure = []; // pilha para rastrear se estamos em objeto {} ou array []
+      // Remove marcadores de código
+      jsonStr = jsonStr.replace(/^```json\s*/gi, '').replace(/```\s*$/gi, '').trim();
       
-      // Pre-processamento: normaliza caracteres problemáticos
-      jsonStr = jsonStr
-        .replace(/\uFEFF/g, '')
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-        .replace(/[""]/g, '"')
-        .replace(/['']/g, "'");
+      // Detecta se o JSON está truncado
+      const lastChars = jsonStr.slice(-20);
+      const isTruncated = !lastChars.includes('}') || jsonStr.split('{').length !== jsonStr.split('}').length;
       
-      // Rastreia o contexto para adicionar vírgulas quando necessário
-      let lastNonWhitespaceChar = '';
-      let lastSignificantChar = ''; // último char significativo (não whitespace, não vírgula)
-      
-      while (i < jsonStr.length) {
-        let char = jsonStr[i];
-        let nextChar = i < jsonStr.length - 1 ? jsonStr[i + 1] : '';
-        let prevChar = i > 0 ? jsonStr[i - 1] : '';
+      if (isTruncated) {
+        console.log('JSON truncado detectado. Última parte:', lastChars);
         
-        // Skip de escape
-        if (escapeNext) {
-          result.push(char);
-          escapeNext = false;
-          i++;
-          continue;
-        }
+        // Remove parte incompleta final (geralmente após a última vírgula completa ou fecha-chave)
+        let cutoffPoint = jsonStr.length;
         
-        // Tratamento de strings
-        if (char === '"' && !escapeNext) {
-          // Verifica se precisamos adicionar vírgula antes da string
-          if (!inString && lastSignificantChar && 
-              (lastSignificantChar === '"' || lastSignificantChar === '}' || lastSignificantChar === ']') &&
-              structure.length > 0) {
-            // Adiciona vírgula se não tiver
-            let lastFewChars = result.slice(-10).join('');
-            if (!lastFewChars.match(/[,\[\{]\s*$/)) {
-              result.push(',');
-            }
-          }
-          
-          inString = !inString;
-          result.push(char);
-          if (!inString) {
-            lastSignificantChar = '"';
-          }
-          i++;
-          continue;
-        }
+        // Procura o último ponto seguro para cortar
+        const lastValidPatterns = [
+          /\}(?=\s*,?\s*$)/g,  // Último }
+          /\](?=\s*,?\s*$)/g,  // Último ]
+          /"[^"]*"(?=\s*,?\s*$)/g,  // Última string completa
+          /\d+(?=\s*,?\s*$)/g,  // Último número
+          /true|false|null(?=\s*,?\s*$)/g  // Último valor booleano/null
+        ];
         
-        // Dentro de string
-        if (inString) {
-          if (char === '\\') {
-            escapeNext = true;
-            result.push(char);
-          } else if (char === '\n' || char === '\r' || char === '\t') {
-            // Substitui quebras de linha por espaço dentro de strings
-            result.push(' ');
-          } else {
-            result.push(char);
-          }
-          i++;
-          continue;
-        }
-        
-        // Fora de strings - tratamento estrutural
-        
-        // Skip whitespace mas mantém rastreio
-        if (/\s/.test(char)) {
-          result.push(char);
-          i++;
-          continue;
-        }
-        
-        // Abertura de objeto
-        if (char === '{') {
-          // Verifica se precisa vírgula antes
-          if (lastSignificantChar && 
-              (lastSignificantChar === '}' || lastSignificantChar === ']' || lastSignificantChar === '"') &&
-              structure.length > 0 && structure[structure.length - 1] === '[') {
-            let lastFewChars = result.slice(-10).join('');
-            if (!lastFewChars.match(/[,\[\{]\s*$/)) {
-              result.push(',');
-            }
-          }
-          
-          result.push(char);
-          structure.push('{');
-          depth++;
-          lastSignificantChar = '{';
-          lastNonWhitespaceChar = '{';
-          i++;
-          continue;
-        }
-        
-        // Abertura de array
-        if (char === '[') {
-          // Verifica se precisa vírgula antes
-          if (lastSignificantChar && 
-              (lastSignificantChar === '}' || lastSignificantChar === ']' || lastSignificantChar === '"') &&
-              structure.length > 0 && structure[structure.length - 1] === '[') {
-            let lastFewChars = result.slice(-10).join('');
-            if (!lastFewChars.match(/[,\[\{:]\s*$/)) {
-              result.push(',');
-            }
-          }
-          
-          result.push(char);
-          structure.push('[');
-          depth++;
-          lastSignificantChar = '[';
-          lastNonWhitespaceChar = '[';
-          i++;
-          continue;
-        }
-        
-        // Fechamento de objeto
-        if (char === '}') {
-          // Remove vírgula trailing se houver
-          let j = result.length - 1;
-          while (j >= 0 && /\s/.test(result[j])) j--;
-          if (result[j] === ',') {
-            result.splice(j, 1);
-          }
-          
-          result.push(char);
-          structure.pop();
-          depth--;
-          lastSignificantChar = '}';
-          lastNonWhitespaceChar = '}';
-          i++;
-          continue;
-        }
-        
-        // Fechamento de array
-        if (char === ']') {
-          // Remove vírgula trailing se houver
-          let j = result.length - 1;
-          while (j >= 0 && /\s/.test(result[j])) j--;
-          if (result[j] === ',') {
-            result.splice(j, 1);
-          }
-          
-          result.push(char);
-          structure.pop();
-          depth--;
-          lastSignificantChar = ']';
-          lastNonWhitespaceChar = ']';
-          i++;
-          continue;
-        }
-        
-        // Vírgula
-        if (char === ',') {
-          // Não adiciona vírgula duplicada
-          let j = result.length - 1;
-          while (j >= 0 && /\s/.test(result[j])) j--;
-          if (result[j] !== ',') {
-            result.push(char);
-          }
-          lastNonWhitespaceChar = ',';
-          i++;
-          continue;
-        }
-        
-        // Dois pontos
-        if (char === ':') {
-          result.push(char);
-          lastNonWhitespaceChar = ':';
-          i++;
-          continue;
-        }
-        
-        // Outros caracteres (números, true, false, null)
-        result.push(char);
-        if (!/\s/.test(char)) {
-          lastNonWhitespaceChar = char;
-          // Atualiza lastSignificantChar para números e valores
-          if (/[0-9\-]/.test(char) || char === 't' || char === 'f' || char === 'n') {
-            // Captura o valor completo (número, true, false, null)
-            let valueStr = char;
-            let k = i + 1;
-            while (k < jsonStr.length && /[a-z0-9.\-]/.test(jsonStr[k])) {
-              valueStr += jsonStr[k];
-              k++;
-            }
-            if (valueStr === 'true' || valueStr === 'false' || valueStr === 'null' || /^-?\d+(\.\d+)?$/.test(valueStr)) {
-              lastSignificantChar = 'value';
+        for (let pattern of lastValidPatterns) {
+          const matches = [...jsonStr.matchAll(pattern)];
+          if (matches.length > 0) {
+            const lastMatch = matches[matches.length - 1];
+            const possibleCutoff = lastMatch.index + lastMatch[0].length;
+            if (possibleCutoff > cutoffPoint - 100) { // Só considera se está perto do fim
+              cutoffPoint = possibleCutoff;
+              break;
             }
           }
         }
-        i++;
+        
+        // Se encontrou um ponto de corte, usa ele
+        if (cutoffPoint < jsonStr.length) {
+          jsonStr = jsonStr.substring(0, cutoffPoint);
+          console.log('Cortado em posição segura:', cutoffPoint);
+        } else {
+          // Se não encontrou, tenta cortar na última vírgula
+          const lastComma = jsonStr.lastIndexOf(',');
+          if (lastComma > jsonStr.length - 100) {
+            jsonStr = jsonStr.substring(0, lastComma);
+            console.log('Cortado na última vírgula');
+          }
+        }
+        
+        // Agora fecha todas as estruturas abertas
+        const openBraces = (jsonStr.match(/{/g) || []).length;
+        const closeBraces = (jsonStr.match(/}/g) || []).length;
+        const openBrackets = (jsonStr.match(/\[/g) || []).length;
+        const closeBrackets = (jsonStr.match(/]/g) || []).length;
+        
+        // Fecha arrays primeiro, depois objetos
+        for (let i = 0; i < openBrackets - closeBrackets; i++) {
+          jsonStr += ']';
+        }
+        for (let i = 0; i < openBraces - closeBraces; i++) {
+          jsonStr += '}';
+        }
+        
+        console.log('Estruturas fechadas. Braces:', openBraces - closeBraces, 'Brackets:', openBrackets - closeBrackets);
       }
       
-      // Fecha estruturas não fechadas
-      while (structure.length > 0) {
-        let openChar = structure.pop();
-        if (openChar === '{') {
-          result.push('}');
-        } else if (openChar === '[') {
-          result.push(']');
-        }
-      }
-      
-      // Fecha string não terminada se houver
-      if (inString) {
-        result.push('"');
-      }
-      
-      let fixed = result.join('');
-      
-      console.log('JSON após deep fix (primeiros 500 chars):', fixed.substring(0, 500));
-      
-      return fixed;
+      return jsonStr;
     }
 
     /**
-     * Parser principal melhorado
+     * Parser principal com reconstrução de JSON truncado
      */
     function parseMarcoResponse(rawResponse) {
       console.log('=== INICIANDO PARSE DO JSON ===');
       console.log('Tamanho da resposta:', rawResponse.length);
+      console.log('Últimos 50 caracteres:', rawResponse.slice(-50));
       
       try {
-        // Etapa 1: Limpar marcadores de código
-        let jsonStr = String(rawResponse || '').trim();
-        jsonStr = jsonStr.replace(/^```json\s*/gi, '');
-        jsonStr = jsonStr.replace(/^```\s*/gi, '');
-        jsonStr = jsonStr.replace(/```\s*$/gi, '');
+        // Etapa 1: Reconstruir se truncado
+        let jsonStr = reconstructTruncatedJSON(rawResponse);
         
-        // Etapa 2: Encontrar o início do JSON
+        // Etapa 2: Limpar e normalizar
+        jsonStr = jsonStr
+          .replace(/\uFEFF/g, '')
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+          .replace(/[""]/g, '"')
+          .replace(/['']/g, "'");
+        
+        // Etapa 3: Encontrar início do JSON
         let startIndex = -1;
-        const patterns = [
-          '{"marco_logico"',
-          '{ "marco_logico"',
-          '{\n"marco_logico"',
-          '{"',
-          '{'
-        ];
+        const patterns = ['{"marco_logico"', '{ "marco_logico"', '{"', '{'];
         
         for (let pattern of patterns) {
           startIndex = jsonStr.indexOf(pattern);
           if (startIndex >= 0) break;
         }
         
-        if (startIndex === -1) {
-          throw new Error('Não foi possível encontrar o início do JSON');
+        if (startIndex > 0) {
+          jsonStr = jsonStr.substring(startIndex);
         }
         
-        jsonStr = jsonStr.substring(startIndex);
+        // Etapa 4: Corrigir problemas comuns
+        jsonStr = jsonStr
+          .replace(/,(\s*[}\]])/g, '$1') // Remove vírgulas antes de fechamento
+          .replace(/([}\]])(\s*)(["{])/g, '$1,$2$3') // Adiciona vírgulas entre elementos
+          .replace(/":\s*"([^"]*)"([^,}\]]*[}\]])/g, '": "$1"$2'); // Corrige valores de string
         
-        // Etapa 3: Aplicar deep fix
-        jsonStr = deepFixJSON(jsonStr);
-        
-        // Etapa 4: Tentar parse
+        // Etapa 5: Parse com múltiplas tentativas
         let parsed;
-        try {
-          parsed = JSON.parse(jsonStr);
-        } catch (e1) {
-          console.error('Primeiro parse falhou:', e1.message);
+        const parseAttempts = [
+          // Tentativa 1: Parse direto
+          () => JSON.parse(jsonStr),
           
-          // Tenta correção adicional mais agressiva
-          jsonStr = jsonStr
-            .replace(/,\s*([}\]])/g, '$1') // Remove vírgulas antes de fechamento
-            .replace(/([}\]])(\s*)(["{])/g, '$1,$2$3') // Adiciona vírgulas entre elementos
-            .replace(/":\s*"([^"]*)"([^,}\]]*[}\]])/g, '": "$1"$2') // Corrige valores de string
-            .replace(/\\\\/g, '\\') // Corrige double escapes
-            .replace(/\\'/g, "'"); // Corrige escapes desnecessários
+          // Tentativa 2: Remove espaços problemáticos e tenta novamente
+          () => {
+            const cleaned = jsonStr.replace(/\n/g, ' ').replace(/\s+/g, ' ');
+            return JSON.parse(cleaned);
+          },
           
-          try {
-            parsed = JSON.parse(jsonStr);
-          } catch (e2) {
-            console.error('Segundo parse falhou:', e2.message);
-            
-            // Última tentativa: extrair apenas o marco_logico
-            try {
-              // Tenta extrair o objeto marco_logico usando regex
-              const marcoMatch = jsonStr.match(/"marco_logico"\s*:\s*(\{[^]*\})\s*\}/);
-              if (marcoMatch) {
-                const marcoContent = marcoMatch[1];
-                parsed = {
-                  marco_logico: JSON.parse(marcoContent)
-                };
-              } else {
-                // Tenta criar uma estrutura mínima válida
-                console.log('Criando estrutura mínima...');
-                parsed = {
+          // Tentativa 3: Usa eval (mais permissivo)
+          () => {
+            const evalStr = jsonStr
+              .replace(/undefined/g, 'null')
+              .replace(/(\w+):/g, '"$1":');
+            return Function('"use strict"; return (' + evalStr + ')')();
+          },
+          
+          // Tentativa 4: Extrai apenas objetivos_especificos se possível
+          () => {
+            const objMatch = jsonStr.match(/"objetivos_especificos"\s*:\s*\[(.*?)\]/s);
+            if (objMatch) {
+              try {
+                const objetivos = JSON.parse('[' + objMatch[1] + ']');
+                return {
                   marco_logico: {
-                    objetivo_geral: "Objetivo não pôde ser extraído",
-                    objetivos_especificos: []
+                    objetivo_geral: "Extraído parcialmente devido a erro no JSON",
+                    objetivos_especificos: objetivos
                   }
                 };
+              } catch (e) {
+                throw e;
               }
-            } catch (e3) {
-              // Se tudo falhar, mostra o JSON problemático para debug
-              console.error('Todas as tentativas falharam');
-              debugInfo.innerHTML = `
-<strong>ERRO CRÍTICO NO PARSE JSON</strong>
-
-Posição do erro: ${e1.message}
-
-<strong>JSON Processado (primeiros 2000 caracteres):</strong>
-${jsonStr.substring(0, 2000)}
-
-<strong>JSON em torno da posição do erro (pos 8497 ± 200):</strong>
-${jsonStr.substring(8297, 8697)}
-
-<strong>Sugestões:</strong>
-1. Verifique se o webhook do Make está configurado corretamente
-2. Verifique se o Make está retornando um JSON válido
-3. Considere simplificar o prompt para gerar JSONs menores
-4. Verifique se há caracteres especiais não escapados no conteúdo
-              `;
-              debugInfo.classList.add('show');
-              
-              throw new Error(`Parse JSON impossível. ${e1.message}`);
             }
+            throw new Error('Não foi possível extrair objetivos');
+          },
+          
+          // Tentativa 5: Cria estrutura mínima com dados parciais
+          () => {
+            console.log('Criando estrutura mínima com dados disponíveis...');
+            
+            // Tenta extrair o objetivo geral
+            const objGeralMatch = jsonStr.match(/"objetivo_geral"\s*:\s*"([^"]*)"/);
+            const objetivoGeral = objGeralMatch ? objGeralMatch[1] : "Não foi possível extrair";
+            
+            // Tenta extrair pelo menos os títulos dos objetivos
+            const titulosMatch = jsonStr.matchAll(/"titulo"\s*:\s*"([^"]*)"/g);
+            const titulos = [...titulosMatch].map(m => m[1]);
+            
+            const objetivosReconstruidos = titulos.slice(0, 5).map((titulo, i) => ({
+              numero: i + 1,
+              titulo: titulo,
+              descricao: "Dados parcialmente recuperados",
+              resultados: []
+            }));
+            
+            return {
+              marco_logico: {
+                objetivo_geral: objetivoGeral,
+                objetivos_especificos: objetivosReconstruidos.length > 0 ? objetivosReconstruidos : []
+              }
+            };
+          }
+        ];
+        
+        let lastError;
+        for (let i = 0; i < parseAttempts.length; i++) {
+          try {
+            console.log(`Tentativa de parse ${i + 1}...`);
+            parsed = parseAttempts[i]();
+            if (parsed) {
+              console.log(`Parse bem-sucedido na tentativa ${i + 1}`);
+              break;
+            }
+          } catch (e) {
+            lastError = e;
+            console.log(`Tentativa ${i + 1} falhou:`, e.message);
           }
         }
         
-        // Validação final
-        if (!parsed || typeof parsed !== 'object') {
-          throw new Error('Resposta não é um objeto válido');
+        if (!parsed) {
+          throw lastError || new Error('Todas as tentativas de parse falharam');
         }
         
+        // Validação e normalização final
         if (!parsed.marco_logico) {
-          console.warn('Campo marco_logico não encontrado, criando estrutura padrão...');
-          parsed = {
-            marco_logico: parsed
-          };
+          parsed = { marco_logico: parsed };
         }
         
-        console.log('=== PARSE CONCLUÍDO COM SUCESSO ===');
+        if (!parsed.marco_logico.objetivos_especificos) {
+          parsed.marco_logico.objetivos_especificos = [];
+        }
+        
+        // Aviso se os dados foram parcialmente recuperados
+        if (parsed.marco_logico.objetivo_geral && parsed.marco_logico.objetivo_geral.includes("parcialmente")) {
+          statusEl.textContent = '⚠️ Dados parcialmente recuperados devido a resposta truncada';
+          statusEl.classList.add('warning');
+        }
+        
+        console.log('=== PARSE CONCLUÍDO ===');
         return parsed;
         
       } catch (error) {
         console.error('Erro fatal no parse:', error);
-        throw error;
+        
+        // Debug detalhado
+        debugInfo.innerHTML = `
+<strong>ERRO NO PROCESSAMENTO DO JSON</strong>
+
+${error.message}
+
+<strong>Análise do problema:</strong>
+O JSON parece estar truncado ou mal formatado. 
+Última parte recebida: "${rawResponse.slice(-100)}"
+
+<strong>Possíveis causas:</strong>
+1. O webhook do Make está cortando a resposta (limite de tamanho)
+2. Timeout na comunicação com a API do Claude
+3. Erro na formatação do JSON pelo Claude
+
+<strong>Soluções sugeridas:</strong>
+1. Reduza o tamanho do edital (envie apenas partes relevantes)
+2. Simplifique as descrições dos objetivos
+3. Configure o Make para aceitar respostas maiores
+4. Verifique os logs do Make para erros de timeout
+
+<strong>Dados brutos (primeiros 2000 caracteres):</strong>
+${rawResponse.substring(0, 2000)}
+        `;
+        debugInfo.classList.add('show');
+        
+        throw new Error('JSON truncado ou mal formatado. Verifique o debug para mais detalhes.');
       }
     }
 
@@ -511,7 +410,7 @@ ${jsonStr.substring(8297, 8697)}
       if (!file) return;
       
       statusEl.textContent = 'Lendo arquivo...';
-      statusEl.classList.remove('error', 'success');
+      statusEl.classList.remove('error', 'success', 'warning');
       debugInfo.classList.remove('show');
       
       try {
@@ -529,12 +428,19 @@ ${jsonStr.substring(8297, 8697)}
         
         editalConteudo = sanitizeString(editalConteudo);
         
+        // Limita o tamanho do conteúdo para evitar problemas
+        const MAX_SIZE = 50000; // 50KB de texto
+        if (editalConteudo.length > MAX_SIZE) {
+          console.log('Edital muito grande, truncando...');
+          editalConteudo = editalConteudo.substring(0, MAX_SIZE) + '... [truncado para processamento]';
+        }
+        
         if (!editalConteudo || editalConteudo.length < 10) {
           throw new Error('Arquivo vazio ou com conteúdo insuficiente');
         }
         
         editalInfo.style.display = 'block';
-        editalInfo.textContent = `✓ ${file.name} carregado com sucesso (${(editalConteudo.length / 1024).toFixed(1)} KB)`;
+        editalInfo.textContent = `✓ ${file.name} carregado (${(editalConteudo.length / 1024).toFixed(1)} KB)`;
         statusEl.textContent = '';
       } catch (error) {
         statusEl.textContent = 'Erro ao ler arquivo: ' + error.message;
@@ -574,6 +480,7 @@ ${jsonStr.substring(8297, 8697)}
       // Limpa debug anterior
       debugInfo.classList.remove('show');
       debugInfo.innerHTML = '';
+      statusEl.classList.remove('warning');
       
       // Validações
       if (!editalConteudo) {
@@ -606,8 +513,8 @@ ${jsonStr.substring(8297, 8697)}
         
         objetivosEspecificos.push({
           numero: i,
-          titulo: titulo,
-          descricao: descricao
+          titulo: titulo.substring(0, 200), // Limita tamanho
+          descricao: descricao.substring(0, 500) // Limita tamanho
         });
       }
       
@@ -615,7 +522,7 @@ ${jsonStr.substring(8297, 8697)}
       const payload = {
         edital: editalConteudo,
         nomeProjeto: nomeProjeto,
-        descricaoProposta: descricaoProposta,
+        descricaoProposta: descricaoProposta.substring(0, 1000), // Limita tamanho
         objetivosEspecificos: objetivosEspecificos,
         objetivosEspecificosTexto: objetivosToOneLine(objetivosEspecificos)
       };
@@ -651,8 +558,10 @@ ${jsonStr.substring(8297, 8697)}
         statusEl.textContent = 'Gerando arquivo Excel...';
         gerarXLSX(parsedResponse, nomeProjeto);
         
-        statusEl.textContent = '✓ Marco Lógico gerado com sucesso! O download deve iniciar automaticamente.';
-        statusEl.classList.add('success');
+        if (!statusEl.classList.contains('warning')) {
+          statusEl.textContent = '✓ Marco Lógico gerado com sucesso!';
+          statusEl.classList.add('success');
+        }
         
       } catch (error) {
         console.error('Erro completo:', error);
@@ -660,19 +569,15 @@ ${jsonStr.substring(8297, 8697)}
         statusEl.classList.add('error');
         
         if (!debugInfo.classList.contains('show')) {
-          // Se ainda não mostrou debug específico, mostra erro genérico
           debugInfo.innerHTML = `
 <strong>Erro no processamento</strong>
 
 ${error.message}
 
-<strong>Possíveis soluções:</strong>
-1. Verifique se o webhook está configurado corretamente
-2. Tente novamente com um texto menor no edital
-3. Simplifique as descrições dos objetivos
-4. Entre em contato com o suporte se o erro persistir
+<strong>Dica:</strong> 
+Se o erro persiste, tente reduzir o tamanho do edital ou simplificar as descrições.
 
-<strong>Stack trace:</strong>
+<strong>Stack:</strong>
 ${error.stack}
           `;
           debugInfo.classList.add('show');
@@ -682,13 +587,12 @@ ${error.stack}
       }
     });
 
-    // Função para gerar XLSX com tratamento robusto
+    // Função para gerar XLSX
     function gerarXLSX(responseData, nomeProjeto) {
       try {
         const marco = responseData.marco_logico || {};
         const objetivos = Array.isArray(marco.objetivos_especificos) ? marco.objetivos_especificos : [];
         
-        // Cria novo workbook
         const wb = XLSX.utils.book_new();
         
         // Calcula estatísticas
@@ -701,74 +605,64 @@ ${error.stack}
           totalResultados += resultados.length;
           
           resultados.forEach(resultado => {
-            const indicadores = Array.isArray(resultado.indicadores) ? resultado.indicadores : [];
-            const atividades = Array.isArray(resultado.atividades) ? resultado.atividades : [];
-            totalIndicadores += indicadores.length;
-            totalAtividades += atividades.length;
+            totalIndicadores += (Array.isArray(resultado.indicadores) ? resultado.indicadores.length : 0);
+            totalAtividades += (Array.isArray(resultado.atividades) ? resultado.atividades.length : 0);
           });
         });
         
-        // Aba 1: Resumo
+        // Aba Resumo
         const resumoData = [
-          ['MARCO LÓGICO - RESUMO EXECUTIVO'],
+          ['MARCO LÓGICO - RESUMO'],
           [''],
-          ['Informações do Projeto'],
-          ['Nome do Projeto:', nomeProjeto || 'Não especificado'],
+          ['Nome do Projeto:', nomeProjeto || ''],
           ['Objetivo Geral:', sanitizeString(marco.objetivo_geral || 'Não especificado')],
-          ['Data de Geração:', new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR')],
+          ['Data:', new Date().toLocaleDateString('pt-BR')],
           [''],
-          ['Estatísticas do Marco Lógico'],
-          ['Objetivos Específicos:', objetivos.length],
-          ['Resultados Esperados:', totalResultados],
+          ['Estatísticas:'],
+          ['Objetivos:', objetivos.length],
+          ['Resultados:', totalResultados],
           ['Indicadores:', totalIndicadores],
-          ['Atividades:', totalAtividades],
-          [''],
-          ['Status:', 'Documento gerado automaticamente via IA']
+          ['Atividades:', totalAtividades]
         ];
         
         const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
-        wsResumo['!cols'] = [
-          { wch: 30 },
-          { wch: 60 }
-        ];
-        
+        wsResumo['!cols'] = [{ wch: 20 }, { wch: 60 }];
         XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
         
-        // Aba 2: Marco Lógico Completo
+        // Aba Marco Lógico
         const marcoData = [
-          ['OBJETIVO ESPECÍFICO', 'RESULTADO ESPERADO', 'INDICADOR', 'META', 'ATIVIDADE', 'LÓGICA DE INTERVENÇÃO', 'PRAZO', 'MEIOS DE VERIFICAÇÃO']
+          ['OBJETIVO', 'RESULTADO', 'INDICADOR', 'META', 'ATIVIDADE', 'LÓGICA', 'PRAZO', 'VERIFICAÇÃO']
         ];
         
         if (objetivos.length === 0) {
-          marcoData.push(['Nenhum objetivo específico encontrado', '', '', '', '', '', '', '']);
+          marcoData.push(['Sem dados', '', '', '', '', '', '', '']);
         } else {
-          objetivos.forEach((objetivo, objIndex) => {
-            const tituloObjetivo = sanitizeString(objetivo.titulo || objetivo.descricao || `Objetivo ${objIndex + 1}`);
-            const resultados = Array.isArray(objetivo.resultados) ? objetivo.resultados : [];
+          objetivos.forEach((obj, i) => {
+            const titulo = sanitizeString(obj.titulo || `Objetivo ${i + 1}`);
+            const resultados = Array.isArray(obj.resultados) ? obj.resultados : [];
             
             if (resultados.length === 0) {
-              marcoData.push([tituloObjetivo, 'Sem resultados definidos', '', '', '', '', '', '']);
+              marcoData.push([titulo, 'Sem resultados', '', '', '', '', '', '']);
             } else {
-              resultados.forEach((resultado, resIndex) => {
-                const tituloResultado = sanitizeString(resultado.titulo || resultado.descricao || `Resultado ${resIndex + 1}`);
-                const indicadores = Array.isArray(resultado.indicadores) ? resultado.indicadores : [];
-                const atividades = Array.isArray(resultado.atividades) ? resultado.atividades : [];
+              resultados.forEach((res, j) => {
+                const resTitulo = sanitizeString(res.titulo || res.descricao || `Resultado ${j + 1}`);
+                const indicadores = Array.isArray(res.indicadores) ? res.indicadores : [];
+                const atividades = Array.isArray(res.atividades) ? res.atividades : [];
+                const maxRows = Math.max(1, indicadores.length, atividades.length);
                 
-                const maxRows = Math.max(indicadores.length, atividades.length, 1);
-                
-                for (let i = 0; i < maxRows; i++) {
-                  const indicador = indicadores[i] || {};
-                  const atividade = atividades[i] || {};
+                for (let k = 0; k < maxRows; k++) {
+                  const ind = indicadores[k] || {};
+                  const atv = atividades[k] || {};
                   
                   marcoData.push([
-                    i === 0 ? tituloObjetivo : '',
-                    i === 0 ? tituloResultado : '',
-                    sanitizeString(indicador.texto || indicador.descricao || indicador.nome || ''),
-                    sanitizeString(indicador.meta || indicador.valor || ''),
-                    sanitizeString(atividade.descricao || atividade.titulo || atividade.nome || ''),
-                    sanitizeString(atividade.logica_intervencao || atividade.logica || ''),
-                    sanitizeString(atividade.prazo || atividade.periodo || ''),
-                    sanitizeString(atividade.meios_verificacao || atividade.verificacao || indicador.meios_verificacao || '')
+                    k === 0 ? titulo : '',
+                    k === 0 ? resTitulo : '',
+                    sanitizeString(ind.texto || ind.descricao || ''),
+                    sanitizeString(ind.meta || ''),
+                    sanitizeString(atv.descricao || atv.titulo || ''),
+                    sanitizeString(atv.logica_intervencao || atv.logica || ''),
+                    sanitizeString(atv.prazo || ''),
+                    sanitizeString(atv.meios_verificacao || ind.meios_verificacao || '')
                   ]);
                 }
               });
@@ -778,38 +672,24 @@ ${error.stack}
         
         const wsMarco = XLSX.utils.aoa_to_sheet(marcoData);
         wsMarco['!cols'] = [
-          { wch: 25 },
-          { wch: 25 },
-          { wch: 30 },
-          { wch: 15 },
-          { wch: 30 },
-          { wch: 25 },
-          { wch: 12 },
-          { wch: 20 }
+          { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 12 },
+          { wch: 25 }, { wch: 20 }, { wch: 10 }, { wch: 15 }
         ];
-        
         XLSX.utils.book_append_sheet(wb, wsMarco, 'Marco Lógico');
         
-        // Gera nome único
+        // Gera arquivo
         const timestamp = new Date().getTime();
-        const nomeArquivoSeguro = nomeProjeto.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
-        const nomeArquivo = `Marco_Logico_${nomeArquivoSeguro}_${timestamp}.xlsx`;
+        const nomeSeguro = nomeProjeto.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+        const nomeArquivo = `Marco_Logico_${nomeSeguro}_${timestamp}.xlsx`;
         
-        // Salva o arquivo
         XLSX.writeFile(wb, nomeArquivo);
-        
-        console.log('Arquivo XLSX gerado com sucesso:', nomeArquivo);
+        console.log('XLSX gerado:', nomeArquivo);
         
       } catch (error) {
         console.error('Erro ao gerar XLSX:', error);
-        throw new Error('Erro ao gerar arquivo Excel: ' + error.message);
+        throw new Error('Erro ao gerar Excel: ' + error.message);
       }
     }
-
-    // Logger para debug em desenvolvimento
-    window.addEventListener('error', (e) => {
-      console.error('Erro global:', e);
-    });
   </script>
 </body>
 </html>
