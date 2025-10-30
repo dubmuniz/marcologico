@@ -91,111 +91,89 @@
       return arr.map(o=>`${o.numero}. ${clean(o.titulo)} | ${clean(o.descricao)}`).join(' || ');
     }
 
-    // Limpar e corrigir JSON quebrado
-    function cleanJSONString(txt){
-      txt=String(txt||'');
-      // Remove markdown
-      txt=txt.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    // Parser melhorado para extrair JSON da resposta
+    function extractMarcoLogico(raw) {
+      if (!raw) throw new Error('Resposta vazia');
       
-      // Remove caracteres de controle problemáticos
-      txt=txt.replace(/[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]/g,' ');
-      
-      // Substitui quebras de linha e tabs por espaço
-      txt=txt.replace(/[\r\n\t]+/g,' ');
-      
-      // Corrige aspas duplas não-escapadas dentro de strings (exceto no início/fim)
-      // Procura por: "...conteúdo"palavra"mais..." e substitui a aspa do meio
-      txt=txt.replace(/"([^"]*?)([^\\])"([^"]*?)"/g,function(match,p1,p2,p3){
-        // Se tem aspa não-escapada no meio, escapa
-        const fixed=p1+(p2==='"'? p2 : p2)+p3;
-        return '"'+fixed.replace(/(?<!\\)"/g,'\\"')+'"';
-      });
-      
-      return txt;
-    }
-    
-    // Extrai a primeira chave JSON válida
-    function extractFirstJSON(txt){
-      // Procura o primeiro { na string
-      const start=txt.indexOf('{');
-      if(start<0) return null;
-      
-      let depth=0;
-      let inString=false;
-      let escape=false;
-      
-      for(let i=start;i<txt.length;i++){
-        const ch=txt[i];
+      try {
+        let txt = String(raw).trim();
         
-        // Controla escape
-        if(escape){
-          escape=false;
-          continue;
-        }
-        if(ch==='\\'){
-          escape=true;
-          continue;
+        console.log('=== Processando Resposta ===');
+        console.log('Tamanho original:', txt.length);
+        console.log('Primeiros 200 chars:', txt.substring(0, 200));
+        
+        // Remove marcadores de código markdown (```json, ```, etc)
+        txt = txt.replace(/^```json\s*/i, '');
+        txt = txt.replace(/^```\s*/, '');
+        txt = txt.replace(/\s*```$/, '');
+        
+        // Remove qualquer texto antes do primeiro {
+        const firstBrace = txt.indexOf('{');
+        if (firstBrace > 0) {
+          console.log('Removendo', firstBrace, 'chars do início');
+          txt = txt.substring(firstBrace);
         }
         
-        // Controla string
-        if(ch==='"'){
-          inString=!inString;
-          continue;
+        // Remove qualquer texto depois do último }
+        const lastBrace = txt.lastIndexOf('}');
+        if (lastBrace > -1 && lastBrace < txt.length - 1) {
+          console.log('Removendo', txt.length - lastBrace - 1, 'chars do final');
+          txt = txt.substring(0, lastBrace + 1);
         }
         
-        // Se não está em string, conta chaves
-        if(!inString){
-          if(ch==='{') depth++;
-          if(ch==='}'){
-            depth--;
-            if(depth===0) return txt.slice(start, i+1);
+        // Limpa espaços em branco extras
+        txt = txt.trim();
+        
+        console.log('Após limpeza (primeiros 200 chars):', txt.substring(0, 200));
+        
+        // Tenta fazer parse do JSON
+        const obj = JSON.parse(txt);
+        
+        console.log('Parse bem-sucedido! Keys:', Object.keys(obj));
+        
+        // Valida estrutura esperada
+        if (obj.marco_logico) {
+          console.log('✓ Estrutura correta encontrada');
+          return obj;
+        }
+        
+        // Se veio sem wrapper, adiciona
+        if (obj.objetivo_geral && obj.objetivos_especificos) {
+          console.log('✓ Estrutura sem wrapper, adicionando...');
+          return { marco_logico: obj };
+        }
+        
+        throw new Error('Estrutura JSON inválida');
+        
+      } catch (e) {
+        console.error('Erro ao processar JSON:', e.message);
+        console.error('Resposta completa:', raw);
+        
+        // Tenta uma última limpeza mais agressiva
+        try {
+          // Remove TUDO que não seja JSON válido
+          let cleaned = String(raw);
+          
+          // Remove múltiplas variações de markdown
+          cleaned = cleaned.replace(/```[a-z]*\n?/gi, '');
+          cleaned = cleaned.replace(/```\n?/g, '');
+          
+          // Extrai apenas o conteúdo entre primeiro { e último }
+          const match = cleaned.match(/\{[\s\S]*\}/);
+          if (match) {
+            console.log('Tentativa final com regex match...');
+            const parsed = JSON.parse(match[0]);
+            
+            if (parsed.marco_logico) return parsed;
+            if (parsed.objetivo_geral && parsed.objetivos_especificos) {
+              return { marco_logico: parsed };
+            }
           }
+        } catch (e2) {
+          console.error('Tentativa final falhou:', e2.message);
         }
-      }
-      return null;
-    }
-
-    // Parser simples - a resposta agora vem em JSON puro
-    function extractMarcoLogico(raw){
-      if(!raw) throw new Error('Resposta vazia');
-      try{
-        // Se já é string, tenta parsear direto
-        if(typeof raw==='string'){
-          console.log('Raw response (primeiros 500 chars):', raw.substring(0, 500));
-          
-          // Tenta limpar
-          let txt=cleanJSONString(raw);
-          console.log('After clean (primeiros 500 chars):', txt.substring(0, 500));
-          
-          // Tenta extrair o primeiro JSON válido
-          const jsonStr=extractFirstJSON(txt);
-          if(!jsonStr) throw new Error('Nenhum JSON encontrado');
-          
-          console.log('Extracted JSON (primeiros 500 chars):', jsonStr.substring(0, 500));
-          
-          const obj=JSON.parse(jsonStr);
-          
-          console.log('Parsed object keys:', Object.keys(obj));
-          
-          // Se veio com marco_logico, retorna
-          if(obj.marco_logico) return obj;
-          
-          // Se veio direto (sem wrapper), envolve
-          if(obj.objetivo_geral && obj.objetivos_especificos){
-            return {marco_logico: obj};
-          }
-          
-          throw new Error('JSON sem estrutura esperada. Keys: '+Object.keys(obj).join(', '));
-        }
-        // Se já é objeto
-        if(raw.marco_logico) return raw;
-        if(raw.objetivo_geral && raw.objetivos_especificos){
-          return {marco_logico: raw};
-        }
-        throw new Error('Formato desconhecido');
-      }catch(e){
-        console.error('Erro completo:',e,'Raw:',raw);
-        throw new Error('JSON inválido: '+e.message);
+        
+        throw new Error('Não foi possível processar o JSON: ' + e.message);
       }
     }
 
@@ -203,8 +181,15 @@
       const buf=await file.arrayBuffer();
       pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-      let txt=''; for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i);const c=await pg.getTextContent();txt+=c.items.map(it=>it.str).join(' ')+' ';} return txt;
+      let txt=''; 
+      for(let i=1;i<=pdf.numPages;i++){
+        const pg=await pdf.getPage(i);
+        const c=await pg.getTextContent();
+        txt+=c.items.map(it=>it.str).join(' ')+' ';
+      } 
+      return txt;
     }
+    
     async function lerDOCX(file){
       const buf=await file.arrayBuffer();
       const r=await mammoth.extractRawText({arrayBuffer:buf});
@@ -212,8 +197,10 @@
     }
 
     editalInput.addEventListener('change',async e=>{
-      const f=e.target.files[0]; if(!f)return;
-      statusEl.textContent='Lendo arquivo...'; statusEl.classList.remove('error','success');
+      const f=e.target.files[0]; 
+      if(!f)return;
+      statusEl.textContent='Lendo arquivo...'; 
+      statusEl.classList.remove('error','success');
       try{
         if(f.name.endsWith('.txt'))editalConteudo=await f.text();
         else if(f.name.endsWith('.pdf'))editalConteudo=await lerPDF(f);
@@ -222,7 +209,10 @@
         editalInfo.style.display='block';
         editalInfo.textContent=`${f.name} carregado (${(editalConteudo.length/1024).toFixed(1)} KB)`;
         statusEl.textContent='';
-      }catch(err){statusEl.textContent='Erro: '+err.message;statusEl.classList.add('error');}
+      }catch(err){
+        statusEl.textContent='Erro: '+err.message;
+        statusEl.classList.add('error');
+      }
     });
 
     document.getElementById('numObjetivos').addEventListener('change',e=>{
@@ -233,10 +223,16 @@
         for(let i=1;i<=n;i++){
           const div=document.createElement('div');
           div.className='objetivo-input-group';
-          div.innerHTML=`<h4>Objetivo ${i}</h4><input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required><textarea name="oe_descricao_${i}" placeholder="Descrição do objetivo ${i}" required></textarea>`;
+          div.innerHTML=`
+            <h4>Objetivo ${i}</h4>
+            <input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required>
+            <textarea name="oe_descricao_${i}" placeholder="Descrição do objetivo ${i}" required></textarea>
+          `;
           objetivosContainer.appendChild(div);
         }
-      }else objetivosSection.classList.remove('ativa');
+      }else{
+        objetivosSection.classList.remove('ativa');
+      }
     });
 
     form.addEventListener('submit',async e=>{
@@ -244,43 +240,69 @@
       const nomeProjeto=document.getElementById('nomeProjeto').value.trim();
       const descricaoProposta=document.getElementById('descricaoProposta').value.trim();
       const num=parseInt(document.getElementById('numObjetivos').value);
-      if(!editalConteudo||!nomeProjeto||!descricaoProposta||!num){statusEl.textContent='Preencha todos os campos.';statusEl.classList.add('error');return;}
+      
+      if(!editalConteudo||!nomeProjeto||!descricaoProposta||!num){
+        statusEl.textContent='Preencha todos os campos.';
+        statusEl.classList.add('error');
+        return;
+      }
+      
       const objetivosEspecificos=[];
       for(let i=1;i<=num;i++){
         const titulo=form[`oe_titulo_${i}`].value.trim();
         const descricao=form[`oe_descricao_${i}`].value.trim();
-        if(!titulo||!descricao){statusEl.textContent=`Preencha o Objetivo ${i}`;statusEl.classList.add('error');return;}
+        if(!titulo||!descricao){
+          statusEl.textContent=`Preencha o Objetivo ${i}`;
+          statusEl.classList.add('error');
+          return;
+        }
         objetivosEspecificos.push({numero:i,titulo,descricao});
       }
+      
       const objetivosEspecificosTexto=objetivosToOneLine(objetivosEspecificos);
-      const safe={edital:sanitizeJSONText(editalConteudo),nomeProjeto:sanitizeJSONText(nomeProjeto),descricaoProposta:sanitizeJSONText(descricaoProposta),objetivosEspecificos,objetivosEspecificosTexto};
+      const safe={
+        edital:sanitizeJSONText(editalConteudo),
+        nomeProjeto:sanitizeJSONText(nomeProjeto),
+        descricaoProposta:sanitizeJSONText(descricaoProposta),
+        objetivosEspecificos,
+        objetivosEspecificosTexto
+      };
 
       try{
         submitBtn.disabled=true;
-        statusEl.textContent='⏳ Enviando para IA...'; statusEl.classList.remove('error','success');
+        statusEl.textContent='⏳ Enviando para IA...'; 
+        statusEl.classList.remove('error','success');
 
         const r=await fetch('https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm',{
-          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(safe)
+          method:'POST', 
+          headers:{'Content-Type':'application/json'}, 
+          body:JSON.stringify(safe)
         });
+        
         if(!r.ok) throw new Error('Erro HTTP '+r.status);
+        
         const txt=await r.text();
         
-        console.log('=== RESPOSTA BRUTA ===');
-        console.log('Tamanho:', txt.length);
-        console.log('Primeiros 1000 chars:', txt.substring(0, 1000));
-        console.log('Últimos 500 chars:', txt.substring(Math.max(0, txt.length-500)));
-        console.log('Contém {:', txt.includes('{'));
-        console.log('Contém marco_logico:', txt.includes('marco_logico'));
-        console.log('=== FIM ===');
+        console.log('=== RESPOSTA DA API ===');
+        console.log('Status:', r.status);
+        console.log('Tamanho resposta:', txt.length);
+        console.log('Resposta completa:', txt);
         
         const marcoLogico=extractMarcoLogico(txt);
+        
+        console.log('=== MARCO LÓGICO EXTRAÍDO ===');
+        console.log('Objetivo Geral:', marcoLogico.marco_logico?.objetivo_geral);
+        console.log('Número de objetivos:', marcoLogico.marco_logico?.objetivos_especificos?.length);
 
-        statusEl.textContent='✅ Marco Lógico gerado, preparando XLSX...'; statusEl.classList.add('success');
+        statusEl.textContent='✅ Marco Lógico gerado, preparando XLSX...'; 
+        statusEl.classList.add('success');
+        
         gerarXLSX(marcoLogico, nomeProjeto);
 
       }catch(err){
-        console.error(err);
-        statusEl.textContent='❌ '+err.message; statusEl.classList.add('error');
+        console.error('Erro completo:', err);
+        statusEl.textContent='❌ '+err.message; 
+        statusEl.classList.add('error');
       }finally{
         submitBtn.disabled=false;
       }
@@ -297,7 +319,17 @@
           const totalIndicadores=objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.indicadores?.length||0),0),0);
           const totalAtividades=objetivos.reduce((a,oe)=>a+(oe.resultados||[]).reduce((b,r)=>b+(r.atividades?.length||0),0),0);
 
-          const resumo=[['PROJETO',nomeProjeto],['OBJETIVO GERAL',marco.marco_logico?.objetivo_geral||''],['DATA GERAÇÃO',new Date().toLocaleDateString('pt-BR')],[''],['ESTATÍSTICAS'],['Objetivos',objetivos.length],['Resultados',totalResultados],['Indicadores',totalIndicadores],['Atividades',totalAtividades]];
+          const resumo=[
+            ['PROJETO',nomeProjeto],
+            ['OBJETIVO GERAL',marco.marco_logico?.objetivo_geral||''],
+            ['DATA GERAÇÃO',new Date().toLocaleDateString('pt-BR')],
+            [''],
+            ['ESTATÍSTICAS'],
+            ['Objetivos',objetivos.length],
+            ['Resultados',totalResultados],
+            ['Indicadores',totalIndicadores],
+            ['Atividades',totalAtividades]
+          ];
           XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(resumo),'Resumo');
 
           const linhas=[['OE','RESULTADO','INDICADOR','META','ATIVIDADE','LÓGICA','PRAZO','VERIFICAÇÃO']];
@@ -307,22 +339,36 @@
               const atvs=r.atividades||[];
               const n=Math.max(inds.length,atvs.length,1);
               for(let i=0;i<n;i++){
-                const ind=inds[i]||{}; const atv=atvs[i]||{};
-                linhas.push([oe.titulo||'',r.titulo||'',ind.texto||'',ind.meta||'',atv.descricao||'',atv.logica_intervencao||'',atv.prazo||'',atv.meios_verificacao||'']);
+                const ind=inds[i]||{}; 
+                const atv=atvs[i]||{};
+                linhas.push([
+                  oe.titulo||'',
+                  r.titulo||'',
+                  ind.texto||'',
+                  ind.meta||'',
+                  atv.descricao||'',
+                  atv.logica_intervencao||'',
+                  atv.prazo||'',
+                  atv.meios_verificacao||''
+                ]);
               }
             });
           });
           XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(linhas),'Marco Lógico');
           XLSX.writeFile(wb,`Marco_Logico_${nomeProjeto.replace(/\s+/g,'_')}.xlsx`);
-          statusEl.textContent='✅ XLSX gerado e baixado'; statusEl.classList.add('success');
-        }catch(err){statusEl.textContent='❌ Erro XLSX: '+err.message; statusEl.classList.add('error');}
+          statusEl.textContent='✅ XLSX gerado e baixado com sucesso!'; 
+          statusEl.classList.add('success');
+        }catch(err){
+          statusEl.textContent='❌ Erro ao gerar XLSX: '+err.message; 
+          statusEl.classList.add('error');
+        }
       };
-      script.onerror=()=>{statusEl.textContent='❌ Falha ao carregar XLSX';statusEl.classList.add('error');};
+      script.onerror=()=>{
+        statusEl.textContent='❌ Falha ao carregar biblioteca XLSX';
+        statusEl.classList.add('error');
+      };
       document.head.appendChild(script);
     }
-  </script>
-</body>
-</html>
   </script>
 </body>
 </html>
