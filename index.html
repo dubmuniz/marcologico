@@ -104,8 +104,6 @@
     const submitBtn = document.getElementById('submitBtn');
     const debugInfo = document.getElementById('debugInfo');
     const debugActions = document.getElementById('debugActions');
-    const copyRawBtn = document.getElementById('copyRaw');
-    const copyHintBtn = document.getElementById('copyHint');
 
     // Estado
     let editalConteudo = '';
@@ -115,19 +113,17 @@
     // Utils
     const sanitizeString = (str) => (str==null?'':String(str).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim());
     const objetivosToOneLine = (arr) => Array.isArray(arr)?arr.map(o=>`${o.numero}. ${sanitizeString(o.titulo).replace(/"/g,'\\"')} | ${sanitizeString(o.descricao).replace(/"/g,'\\"')}`).join(' || '):'';
-    const CONTROL_GUIDE = "INSTRUCOES_GERACAO:\n- Nao copiar literalmente; use sinonimos.\n- Objetivo Especifico = mudanca; Resultado = produto/efeito imediato.\n- Titulos sem as palavras Resultado/Atividade; verbo no infinitivo + objeto.\n- Indicadores SMART com numeros; ≥2 entregaveis nomeados por resultado.\n- Logica de Intervencao com 2–3 frases, maiuscula inicial.\n- Atividades: 2 por resultado, prazos livres em meses.\n";
 
     // Base64 helpers
-    function b64utf8(s){return btoa(unescape(encodeURIComponent(String(s))));}
     function normalizeB64Loose(s){
       if(!s) return '';
       let t = String(s).trim();
       t = t.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
       t = t.replace(/^[`'"]+|[`'"]+$/g,'').trim();
-      t = t.replace(/\s+/g,'');
-      t = t.replace(/-/g,'+').replace(/_/g,'/');
+      t = t.replace(/\s+/g,'');               // remove quebras e espaços
+      t = t.replace(/-/g,'+').replace(/_/g,'/'); // url-safe → padrão
       const pad = t.length % 4; if (pad) t += '='.repeat(4-pad);
-      t = t.replace(/[^A-Za-z0-9+/=]/g,'');
+      t = t.replace(/[^A-Za-z0-9+/=]/g,'');   // limpa qualquer ruído
       return t;
     }
     function b64ToBytesLoose(s){
@@ -137,18 +133,20 @@
       for (let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
       return out;
     }
-    function tryGunzipToText(bytes){
-      try{ return new TextDecoder('utf-8').decode(pako.ungzip(bytes)); }catch{return null;}
+    function tryDecompress(bytes){
+      // 1) tentar GZIP
+      try{ return new TextDecoder('utf-8').decode(pako.ungzip(bytes)); }catch(e1){}
+      // 2) tentar ZLIB/deflate
+      try{ return new TextDecoder('utf-8').decode(pako.inflate(bytes)); }catch(e2){}
+      return null;
     }
 
     // Extração agressiva de candidato Base64
     function extractCandidateB64(respText){
       let t = String(respText||'').trim();
 
-      // Saídas obviamente inválidas: muito curtas
-      if (t.length < 40) {
-        return {type:'too-short', value:t};
-      }
+      // Muito curto → certamente errado (ex.: "2")
+      if (t.length < 40) return {type:'too-short', value:t};
 
       // JSON direto com marco_logico
       if (t.startsWith('{')) {
@@ -164,52 +162,44 @@
             for(const k of p){ if (cur && (k in cur)) cur = cur[k]; else {ok=false;break;} }
             if (ok && typeof cur === 'string' && cur.length>40) return {type:'json-b64', value: cur};
           }
-          const flat = JSON.stringify(j);
-          const m = flat.match(/["'`](?:[A-Za-z0-9+/_-]{80,})["'`]/);
-          if (m) return {type:'regex-b64-json', value: m[0].slice(1,-1)};
         } catch(e){/* segue */}
       }
 
-      // Regex bruto
+      // Regex bruto pega a “H4sIA…” completa
       const m2 = t.replace(/\s+/g,'').match(/([A-Za-z0-9+/_-]{80,}={0,2})/);
       if (m2) return {type:'regex-b64-raw', value: m2[1]};
 
       return {type:'no-candidate', value:t};
     }
 
-    // Parser tolerante
+    // Parser tolerante: agora tenta ungzip e inflate
     function parseFromProvider(raw){
-      const original = String(raw||'').trim();
-      const cand = extractCandidateB64(original);
+      const cand = extractCandidateB64(String(raw||'').trim());
 
-      // tratativas especiais
       if (cand.type === 'too-short' || cand.type === 'no-candidate') {
         const err = new Error('Falha ao interpretar JSON da IA');
         err._path = cand.type;
-        err._snippet = cand.value.slice(0,200);
+        err._snippet = (cand.value||'').slice(0,200);
         throw err;
       }
-      if (cand.type === 'json-direct') {
-        return JSON.parse(cand.value);
-      }
+      if (cand.type === 'json-direct') return JSON.parse(cand.value);
 
-      // Base64 → bytes
       const bytes = b64ToBytesLoose(cand.value);
 
-      // tenta gunzip → json
-      const asGz = tryGunzipToText(bytes);
-      if (asGz){
-        let clean = asGz.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
+      // gzip/deflate
+      const text = tryDecompress(bytes);
+      if (text){
+        let clean = text.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
         const start = clean.indexOf('{"marco_logico"'); if (start>0) clean = clean.slice(start);
         try { return JSON.parse(clean); } catch{}
         try { return JSON.parse(clean.replace(/,(\s*[}\]])/g,'$1')); } catch{}
         const err = new Error('Falha ao interpretar JSON da IA');
-        err._path = cand.type + ' (gunzip)';
+        err._path = cand.type + ' (decompress)';
         err._snippet = clean.slice(0,200);
         throw err;
       }
 
-      // sem gzip: tentar como base64 de json plano
+      // como último recurso: base64 de JSON plano
       const asText = new TextDecoder('utf-8').decode(bytes);
       let clean = asText.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
       const start = clean.indexOf('{"marco_logico"'); if (start>0) clean = clean.slice(start);
@@ -224,140 +214,16 @@
     // Normalizador mínimo
     function normalizeMarco(data, payload){
       const ml = data?.marco_logico || {};
-      const objetivoGeral = sanitizeString(ml.objetivo_geral || payload?.descricaoProposta || payload?.nomeProjeto || 'nao informado');
+      const objetivoGeral = (ml.objetivo_geral || payload?.descricaoProposta || payload?.nomeProjeto || 'não informado').trim();
       const solicitados = Array.isArray(payload?.objetivosEspecificos) ? payload.objetivosEspecificos.length : 0;
       const baseObjs = Array.isArray(ml.objetivos_especificos) ? ml.objetivos_especificos : [];
 
       while(baseObjs.length < solicitados){
         const i = baseObjs.length;
         const src = payload.objetivosEspecificos[i];
-        baseObjs.push({ numero: i+1, titulo: sanitizeString(src?.titulo||(`Objetivo ${i+1}`)), descricao: sanitizeString(src?.descricao||('')), resultados: [], atividades: [] });
+        baseObjs.push({ numero: i+1, titulo: (src?.titulo||(`Objetivo ${i+1}`)), descricao: (src?.descricao||''), resultados: [], atividades: [] });
       }
-
-      const objetivos = baseObjs.slice(0, Math.max(solicitados, baseObjs.length)).map((obj, idx)=>{
-        const titulo = sanitizeString(obj.titulo||payload?.objetivosEspecificos?.[idx]?.titulo||`Objetivo ${idx+1}`);
-        const desc = sanitizeString(obj.descricao||payload?.objetivosEspecificos?.[idx]?.descricao||'');
-        let resultados = Array.isArray(obj.resultados)?obj.resultados:[];
-        if(resultados.length===0){
-          resultados = [1,2].map(rn=>({
-            titulo: `Entregar componente ${idx+1}.${rn}`,
-            indicadores: [
-              { texto:`Manual do componente publicado`, meta:`1 manual ate M6`, meios_verificacao:[`link do manual`] },
-              { texto:`3 oficinas realizadas`, meta:`3 oficinas ate M12`, meios_verificacao:[`listas de presenca`] },
-              { texto:`Satisfacao media >= ${82+rn}%`, meta:`>= ${82+rn}% ate M12`, meios_verificacao:[`pesquisa de satisfacao`] }
-            ],
-            meios_verificacao:[`relatorios e planilhas`],
-            atividades: [
-              { titulo:`Planejar ${titulo}`, descricao:`Definir escopo, recursos e riscos`, logica_intervencao:`Planejamento claro reduz riscos e retrabalho. Priorizacao orienta alocacao de recursos.`, prazo:`M1-3` },
-              { titulo:`Executar piloto`, descricao:`Validar solucao com grupo reduzido`, logica_intervencao:`Iteracoes curtas aceleram aprendizado. Evidencias facilitam ajustes.`, prazo:`M3-6` }
-            ]
-          }));
-        }
-        return { numero: obj.numero||idx+1, titulo, descricao:desc, resultados, atividades: obj.atividades||[] };
-      });
-
-      return { marco_logico: { objetivo_geral: objetivoGeral, objetivos_especificos: objetivos} };
-    }
-
-    // Estilo & enriquecimento
-    function cleanTitle(t){
-      if(!t) return '';
-      let s = String(t).trim();
-      s = s.replace(/^\s*\d+(?:\.\d+)*\s*[:\-–]\s*/,'');
-      s = s.replace(/\b(Resultado|Atividade|Objetivo)\b.*?:?\s*/ig,'');
-      s = s.replace(/\s{2,}/g,' ').trim();
-      return s || 'Definir entregavel prioritario';
-    }
-    function sentenceCasePara(p){
-      return String(p||'').split('.').map(s => {
-        const x = s.trim();
-        if(!x) return '';
-        return x.charAt(0).toUpperCase() + x.slice(1);
-      }).filter(Boolean).join('. ') + (p && !/[.!?]\s*$/.test(p)?'.':'');
-    }
-    function synthDeliverables(resTitle){
-      const base = cleanTitle(resTitle).toLowerCase();
-      return [
-        {texto:`Manual de ${base} publicado`, meta:`1 manual ate M6`, mov:[`link do manual`]},
-        {texto:`Plataforma v1 de ${base} lancada`, meta:`v1 ativa ate M12`, mov:[`URL da plataforma`]},
-        {texto:`3 oficinas sobre ${base} realizadas`, meta:`3 oficinas ate M12`, mov:[`listas de presenca`]}
-      ];
-    }
-    function enrichIndicators(res){
-      let inds = Array.isArray(res.indicadores)? res.indicadores : [];
-      inds = inds.filter(i => i && (i.texto||'').trim());
-      const dlv = synthDeliverables(res.titulo||'resultado');
-      for(const d of dlv){
-        if(inds.length>=2) break;
-        inds.push({texto:d.texto, meta:d.meta, meios_verificacao:d.mov});
-      }
-      while(inds.length<3){
-        const k = inds.length+1;
-        inds.push({
-          texto: `Satisfacao media >= ${80 + k}% do publico-alvo`,
-          meta:  `>= ${80 + k}% ate M12`,
-          meios_verificacao: [`pesquisa de satisfacao`]
-        });
-      }
-      res.indicadores = inds.map(i=>({
-        texto: cleanTitle(i.texto),
-        meta:  String(i.meta||'nao informado'),
-        meios_verificacao: Array.isArray(i.meios_verificacao)&&i.meios_verificacao.length? i.meios_verificacao.map(String): ['nao informado']
-      }));
-    }
-    function enrichActivities(res){
-      let acts = Array.isArray(res.atividades)? res.atividades : [];
-      acts = acts.filter(a=>a && (a.titulo||a.descricao));
-      const needed = Math.max(0, 2 - acts.length);
-      const seeds = [
-        {titulo:`Planejar ${cleanTitle(res.titulo)}`, prazo:'M1-3'},
-        {titulo:`Executar piloto de ${cleanTitle(res.titulo)}`, prazo:'M3-6'},
-        {titulo:`Documentar e publicar ${cleanTitle(res.titulo)}`, prazo:'M6-12'}
-      ];
-      for(let i=0;i<needed;i++){
-        const s = seeds[i%seeds.length];
-        acts.push({
-          titulo: s.titulo,
-          descricao: `Definir escopo, recursos e responsabilidades.`,
-          logica_intervencao: `Planejamento claro reduz riscos e retrabalho. Foco em iteracoes curtas acelera aprendizado. Evidencias publicadas facilitam reproducao e monitoramento.`,
-          prazo: s.prazo
-        });
-      }
-      res.atividades = acts.slice(0,2).map(a=>({
-        titulo: cleanTitle(a.titulo),
-        descricao: cleanTitle(a.descricao||''),
-        logica_intervencao: sentenceCasePara(a.logica_intervencao || `A intervencao gera valor ao alinhar escopo e recursos. Evidencias permitem ajuste continuo.`),
-        prazo: String(a.prazo||'M1-3')
-      }));
-    }
-    function separateObjectiveFromResults(obj){
-      const objCore = (obj.titulo||'').toLowerCase().slice(0,60);
-      (obj.resultados||[]).forEach(r=>{
-        let t = cleanTitle(r.titulo||'');
-        if(t.toLowerCase().includes(objCore)){
-          t = t.replace(new RegExp(objCore,'i'),'').trim();
-        }
-        r.titulo = t || 'Entregar produto e efeito imediato';
-      });
-    }
-    function enforceStyle(model){
-      const ml = model && model.marco_logico ? model.marco_logico : {objetivos_especificos:[]};
-      ml.objetivo_geral = sentenceCasePara(ml.objetivo_geral || 'nao informado');
-      (ml.objetivos_especificos||[]).forEach((obj)=>{
-        obj.titulo = cleanTitle(obj.titulo||'');
-        obj.descricao = cleanTitle(obj.descricao||'');
-        separateObjectiveFromResults(obj);
-        (obj.resultados||[]).forEach((r)=>{
-          r.titulo = cleanTitle(r.titulo||'');
-          enrichIndicators(r);
-          enrichActivities(r);
-          if(!Array.isArray(r.meios_verificacao) || r.meios_verificacao.length===0){
-            r.meios_verificacao = ['relatorios e evidencias publicadas'];
-          }
-        });
-      });
-      model.marco_logico = ml;
-      return model;
+      return { marco_logico: { objetivo_geral: objetivoGeral, objetivos_especificos: baseObjs } };
     }
 
     // XLSX
@@ -453,10 +319,10 @@
       const buf = await file.arrayBuffer(); const res = await mammoth.extractRawText({arrayBuffer:buf}); return sanitizeString(res.value);
     }
 
-    // Eventos
+    // UI dinâmico
     editalInput.addEventListener('change', async (e)=>{
       const file=e.target.files[0]; if(!file) return;
-      statusEl.textContent='Lendo arquivo...'; statusEl.classList.remove('error','success'); debugInfo.classList.remove('show'); debugActions.style.display='none';
+      statusEl.textContent='Lendo arquivo...'; statusEl.classList.remove('error','success'); debugInfo.classList.remove('show'); document.getElementById('debugActions').style.display='none';
       try{
         const name=file.name.toLowerCase();
         if(name.endsWith('.txt')||file.type==='text/plain'){editalConteudo=await file.text();}
@@ -475,7 +341,7 @@
       const n=parseInt(e.target.value)||0;
       objetivosContainer.innerHTML='';
       if(n>0){
-        objetivosSection.classList.add('ativa');
+        document.getElementById('objetivosSection').classList.add('ativa');
         for(let i=1;i<=n;i++){
           const div=document.createElement('div'); div.className='objetivo-input-group';
           div.innerHTML=`<strong>Objetivo Específico ${i}</strong>
@@ -483,23 +349,24 @@
             <textarea name="oe_descricao_${i}" placeholder="Descrição detalhada do objetivo ${i}" required></textarea>`;
           objetivosContainer.appendChild(div);
         }
-      } else objetivosSection.classList.remove('ativa');
+      } else document.getElementById('objetivosSection').classList.remove('ativa');
     });
 
-    copyRawBtn.addEventListener('click', ()=>{
+    document.getElementById('copyRaw')?.addEventListener('click', ()=>{
       if(!lastRawResponse) return;
       navigator.clipboard.writeText(lastRawResponse);
       alert('Resposta crua copiada.');
     });
-    copyHintBtn.addEventListener('click', ()=>{
-      const hint = 'No módulo "Webhook response" do Make, defina Body como a string Base64 completa do Claude. Exemplos:\n- {{Claude[1].content}}\n- {{join(map(Claude[1].content; text); "")}}\nNão use length(), size() ou contagem de bundles.';
+    document.getElementById('copyHint')?.addEventListener('click', ()=>{
+      const hint = 'No "Webhook response" use Body = string Base64 do Claude. Ex.: {{Claude[1].content}} ou {{join(map(Claude[1].content; text); "")}}. Content-Type: text/plain.';
       navigator.clipboard.writeText(hint);
       alert('Dica copiada.');
     });
 
+    // Submit
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      debugInfo.classList.remove('show'); debugInfo.innerHTML=''; debugActions.style.display='none';
+      debugInfo.classList.remove('show'); debugInfo.innerHTML=''; document.getElementById('debugActions').style.display='none';
       statusEl.classList.remove('error','success');
       if(!editalConteudo){ statusEl.textContent='Por favor, carregue o arquivo do edital'; statusEl.classList.add('error'); return; }
 
@@ -516,16 +383,11 @@
         objetivosEspecificos.push({numero:i,titulo:t.substring(0,200),descricao:d.substring(0,500)});
       }
 
-      const editalForModel   = ("INSTRUCOES_GERACAO\n"+editalConteudo).slice(0, MAX_EDITAL);
-      const projetoForModel  = ("INSTRUCOES_GERACAO\n"+nomeProjeto).slice(0, MAX_PROJ);
-      const propostaForModel = ("INSTRUCOES_GERACAO\n"+descricaoProposta).slice(0, MAX_PROP);
-      const objsTxtForModel  = ("INSTRUCOES_GERACAO\n"+objetivosToOneLine(objetivosEspecificos)).slice(0, MAX_OBJS);
-
       const payload={
-        edital_b64: b64utf8(editalForModel),
-        nomeProjeto_b64: b64utf8(projetoForModel),
-        descricaoProposta_b64: b64utf8(propostaForModel),
-        objetivosEspecificosTexto_b64: b64utf8(objsTxtForModel),
+        edital_b64: btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+editalConteudo).slice(0,MAX_EDITAL)))),
+        nomeProjeto_b64: btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+nomeProjeto).slice(0,MAX_PROJ)))),
+        descricaoProposta_b64: btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+descricaoProposta).slice(0,MAX_PROP)))),
+        objetivosEspecificosTexto_b64: btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+objetivosToOneLine(objetivosEspecificos)).slice(0,MAX_OBJS)))),
         nomeProjeto, descricaoProposta, objetivosEspecificos,
         objetivosEspecificosTexto: objetivosToOneLine(objetivosEspecificos),
         filled_at: new Date().toISOString().slice(0,10),
@@ -554,17 +416,16 @@
           debugInfo.textContent =
             'Diagnóstico do parser: ' + (e._path ? `[${e._path}] ` : '') + (e.message||'') +
             '\nPrévia retorno: ' + short +
-            (likelyMake ? '\n>> O retorno é muito curto (ex.: "2"). Verifique o módulo "Webhook response" no Make. O Body deve devolver a STRING Base64 do Claude, não o número de bundles nem length().' : '');
+            (likelyMake ? '\n>> O retorno é muito curto (ex.: "2"). No Webhook response, Body deve ser a STRING Base64 do Claude. Content-Type: text/plain.' : '');
           debugInfo.classList.add('show');
-          debugActions.style.display='flex';
+          document.getElementById('debugActions').style.display='flex';
           throw e;
         }
 
         const normalized = normalizeMarco(parsed, lastPayload);
-        const styled = enforceStyle(normalized);
 
         statusEl.textContent='Gerando arquivo Excel...';
-        gerarXLSX(styled, nomeProjeto);
+        gerarXLSX(normalized, nomeProjeto);
 
         statusEl.textContent='✓ Marco Lógico gerado com sucesso!';
         statusEl.classList.add('success');
@@ -576,7 +437,7 @@
         if(!debugInfo.classList.contains('show')){
           debugInfo.textContent = (err && err.stack) ? err.stack : String(err);
           debugInfo.classList.add('show');
-          debugActions.style.display='flex';
+          document.getElementById('debugActions').style.display='flex';
         }
       }finally{
         submitBtn.disabled=false;
@@ -585,6 +446,7 @@
   </script>
 </body>
 </html>
+
 
 
 
