@@ -84,10 +84,10 @@
 
   <script>
     // CONFIG
-    const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm'; // seu webhook Make
+    const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
     const MAX_EDITAL = 10000, MAX_PROJ = 400, MAX_PROP = 2000, MAX_OBJS = 4000;
 
-    // UI
+    // UI refs
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
     const editalInfo = document.getElementById('editalInfo');
@@ -102,48 +102,111 @@
     let editalConteudo = '';
     let lastPayload = null;
 
-    // Util
+    // Utils
     const sanitizeString = (str) => (str==null?'':String(str).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim());
     const objetivosToOneLine = (arr) => Array.isArray(arr)?arr.map(o=>`${o.numero}. ${sanitizeString(o.titulo).replace(/"/g,'\\"')} | ${sanitizeString(o.descricao).replace(/"/g,'\\"')}`).join(' || '):'';
-    const CONTROL_GUIDE = "INSTRUCOES_GERACAO:\n- Nao copiar literalmente trechos do edital ou proposta; usar sinonimos.\n- Objetivo Especifico descreve mudanca de capacidade/comportamento.\n- Resultado descreve produto ou efeito imediato e deve ser diferente do objetivo.\n- Titulos sem as palavras Resultado ou Atividade e sem numeracao; usar verbo no infinitivo + objeto claro.\n- Indicadores SMART com numeros; pelo menos 2 entregaveis nomeados por resultado.\n- Logica de Intervencao com 2 a 3 frases iniciando com maiuscula.\n- Atividades: 2 por resultado, prazos M1-3 ou M3-6 ou M6-12.\n";
+    const CONTROL_GUIDE = "INSTRUCOES_GERACAO:\n- Nao copiar literalmente trechos do edital ou proposta; usar sinonimos.\n- Objetivo Especifico descreve mudanca de capacidade/comportamento.\n- Resultado descreve produto ou efeito imediato e deve ser diferente do objetivo.\n- Titulos sem as palavras Resultado ou Atividade e sem numeracao; usar verbo no infinitivo + objeto claro.\n- Indicadores SMART com numeros; pelo menos 2 entregaveis nomeados por resultado.\n- Logica de Intervencao com 2 a 3 frases iniciando com maiuscula.\n- Atividades: 2 por resultado, prazos livres em meses.\n";
 
     // Base64 helpers
-    function b64utf8(s){return btoa(unescape(encodeURIComponent(s)));}
+    function b64utf8(s){return btoa(unescape(encodeURIComponent(String(s))));}
+    function isLikelyB64(s){
+      if(!s) return false;
+      const t = String(s).trim().replace(/[\r\n\s`"]/g,'');
+      return /^[A-Za-z0-9+/_=-]+$/.test(t) && t.length >= 16;
+    }
+    function normalizeB64(s){
+      let t = String(s||'').trim();
+      // remove cercas e wrappers comuns
+      t = t.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+      // se for JSON envelope, tenta extrair campos comuns
+      if (t.startsWith('{')) {
+        try {
+          const j = JSON.parse(t);
+          if (j && j.b64) return normalizeB64(j.b64);
+          if (j && j.content) return normalizeB64(j.content);
+          if (j && j.data) return normalizeB64(j.data);
+          if (j && j.marco_logico) return b64utf8(JSON.stringify(j)); // já é JSON final
+        } catch(e){}
+      }
+      // tira aspas soltas e espaços
+      t = t.replace(/^[`'"]+|[`'"]+$/g,'').replace(/\s+/g,'');
+      // url-safe → padrão
+      t = t.replace(/-/g,'+').replace(/_/g,'/');
+      // padding
+      const pad = t.length % 4; if (pad) t += '='.repeat(4-pad);
+      return t;
+    }
     function b64ToBytes(b64){
-      const bin = atob(b64.trim());
-      const len = bin.length, bytes = new Uint8Array(len);
-      for(let i=0;i<len;i++) bytes[i]=bin.charCodeAt(i);
-      return bytes;
-    }
-    function gunzipToText(b64){
-      const bytes = b64ToBytes(b64);
-      const uz = pako.ungzip(bytes);
-      return new TextDecoder('utf-8').decode(uz);
-    }
-
-    // Leitura arquivos
-    async function lerPDF(file){
-      const buf = await file.arrayBuffer();
-      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-      let texto=''; for(let p=1;p<=pdf.numPages;p++){ const page=await pdf.getPage(p); const tc=await page.getTextContent(); texto += tc.items.map(i=>i.str).join(' ')+' '; }
-      return sanitizeString(texto);
-    }
-    async function lerDOCX(file){
-      const buf = await file.arrayBuffer(); const res = await mammoth.extractRawText({arrayBuffer:buf}); return sanitizeString(res.value);
-    }
-
-    // Parser do provedor: recebe Base64 GZIP e devolve objeto
-    function parseFromProvider(b64){
+      const clean = normalizeB64(b64);
       try{
-        const jsonText = gunzipToText(b64);
-        return JSON.parse(jsonText);
+        const bin = atob(clean);
+        const out = new Uint8Array(bin.length);
+        for (let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+        return out;
       }catch(e){
-        throw new Error('Falha ao interpretar JSON da IA');
+        throw new Error('Base64 inválido após normalização');
       }
     }
+    function tryGunzipToText(bytes){
+      try{ return new TextDecoder('utf-8').decode(pako.ungzip(bytes)); }
+      catch{ return null; }
+    }
 
-    // Normalizador
+    // Parser tolerante do provedor
+    function parseFromProvider(raw){
+      const original = String(raw||'').trim();
+      // 1) Se já veio JSON direto com marco_logico
+      if (original.startsWith('{')) {
+        try{
+          const j = JSON.parse(original);
+          if (j && j.marco_logico) return j;
+          if (j && typeof j.b64 === 'string') {
+            const bytes = b64ToBytes(j.b64);
+            const gun = tryGunzipToText(bytes);
+            if (gun) return JSON.parse(gun);
+            const asText = new TextDecoder('utf-8').decode(bytes);
+            return JSON.parse(asText);
+          }
+        }catch(e){/* continua */}
+      }
+
+      // 2) Tratar como Base64 “de alguma forma”
+      let b64 = normalizeB64(original);
+      if (!isLikelyB64(b64)) {
+        // última tentativa: remover tudo que não é base64 e tentar
+        b64 = original.replace(/[^A-Za-z0-9+/_=-]/g,'');
+      }
+      const bytes = b64ToBytes(b64);
+      // tenta gunzip
+      const gun = tryGunzipToText(bytes);
+      let text = gun;
+      if (!text) {
+        // pode ser apenas JSON plano em Base64
+        text = new TextDecoder('utf-8').decode(bytes);
+      }
+      // sanitiza texto JSON
+      let clean = String(text||'')
+        .replace(/\uFEFF/g,'')
+        .replace(/[\u0000-\u001F\u007F]/g,' ')
+        .replace(/\s+\}/g,'}')
+        .replace(/\s+\]/g,']')
+        .trim();
+
+      // corta sobras fora do objeto principal
+      const start = clean.indexOf('{"marco_logico"');
+      if (start > 0) clean = clean.slice(start);
+      // tenta parser direto
+      try { return JSON.parse(clean); } catch(e1){}
+      // remove vírgulas antes de ']' ou '}'
+      try { return JSON.parse(clean.replace(/,(\s*[}\]])/g,'$1')); } catch(e2){}
+      // erro final com diagnóstico útil
+      const snippet = clean.slice(0,200);
+      const err = new Error('Falha ao interpretar JSON da IA');
+      err._snippet = snippet;
+      throw err;
+    }
+
+    // Normalizador mínimo (mantido do seu fluxo)
     function normalizeMarco(data, payload){
       const ml = data?.marco_logico || {};
       const objetivoGeral = sanitizeString(ml.objetivo_geral || payload?.descricaoProposta || payload?.nomeProjeto || 'nao informado');
@@ -171,18 +234,17 @@
             meios_verificacao:[`relatorios e planilhas`],
             atividades: [
               { titulo:`Planejar ${titulo}`, descricao:`Definir escopo, recursos e riscos`, logica_intervencao:`Planejamento claro reduz riscos e retrabalho. Priorizacao orienta alocacao de recursos.`, prazo:`M1-3` },
-              { titulo:`Executar piloto`, descricao:`Validar solucao com grupo reduzido`, logica_intervencao:`Iteracoes curtas aceleram aprendizado. Evidencias facilitam ajustes.`, prazo:`M3-6` },
-              { titulo:`Publicar evidencias`, descricao:`Relatorio e materiais de apoio`, logica_intervencao:`Transparencia gera confianca e replicabilidade.`, prazo:`M6-12` }
+              { titulo:`Executar piloto`, descricao:`Validar solucao com grupo reduzido`, logica_intervencao:`Iteracoes curtas aceleram aprendizado. Evidencias facilitam ajustes.`, prazo:`M3-6` }
             ]
           }));
         }
         return { numero: obj.numero||idx+1, titulo, descricao:desc, resultados, atividades: obj.atividades||[] };
       });
 
-      return { marco_logico: { objetivo_geral: objetivoGeral, objetivos_especificos: objetivos } };
+      return { marco_logico: { objetivo_geral: objetivoGeral, objetivos_especificos: objetivos} };
     }
 
-    // Enriquecimento e estilo
+    // Estilo e enriquecimento (mantidos)
     function cleanTitle(t){
       if(!t) return '';
       let s = String(t).trim();
@@ -250,7 +312,7 @@
         titulo: cleanTitle(a.titulo),
         descricao: cleanTitle(a.descricao||''),
         logica_intervencao: sentenceCasePara(a.logica_intervencao || `A intervencao gera valor ao alinhar escopo e recursos. Evidencias permitem ajuste continuo.`),
-        prazo: /^(M1-3|M3-6|M6-12|M12-24)$/.test(a.prazo||'') ? a.prazo : 'M1-3'
+        prazo: String(a.prazo||'M1-3')
       }));
     }
     function separateObjectiveFromResults(obj){
@@ -302,7 +364,7 @@
         merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:7}});
 
         const startRIndex = aoa.length;
-        aoa.push(['', 'Indicadores', 'Meta', 'Meios de Verificação', '', '', '', '']); // header de bloco
+        aoa.push(['RESULTADOS OBJETIVO '+(obj.numero||idx+1), 'Indicadores', 'Meta', 'Meios de Verificação', '', '', '', '']);
 
         const resultados = Array.isArray(obj.resultados) ? obj.resultados : [];
         let linhas = 0;
@@ -325,10 +387,8 @@
         });
 
         if (linhas === 0) { aoa.push(['Sem resultados definidos', '', '', '', '', '', '', '']); linhas = 1; }
-        aoa[startRIndex][0] = `RESULTADOS OBJETIVO ${obj.numero||idx+1}`;
-        merges.push({s:{r:startRIndex,c:0},e:{r:startRIndex,c:7}});
 
-        aoa.push(['', 'Atividades', 'Lógica de Intervenção', 'Prazo e/ou periodicidade', '', '', '', '']);
+        aoa.push(['', 'Atividades', 'Lógica de Intervenção', 'Prazo', '', '', '', '']);
         const atividades = resultados.flatMap(r=>Array.isArray(r.atividades)?r.atividades:[]);
         if (atividades.length === 0) {
           aoa.push(['', 'Sem atividades definidas', '', '', '', '', '', '']);
@@ -342,7 +402,7 @@
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = [{ wch: 36 }, { wch: 42 }, { wch: 22 }, { wch: 38 }, { wch: 4 }, { wch: 4 }, { wch: 4 }, { wch: 4 }];
       ws['!merges'] = merges;
-      // Wrap de todas as células
+      // wrap
       const range = XLSX.utils.decode_range(ws['!ref']);
       for(let R=range.s.r; R<=range.e.r; R++){
         for(let C=range.s.c; C<=range.e.c; C++){
@@ -355,7 +415,7 @@
 
       const wsR = XLSX.utils.aoa_to_sheet([
         ['MARCO LÓGICO - RESUMO'], [''],
-        ['Nome do Projeto', nomeProjeto||''],
+        ['Nome do Projeto', String(nomeProjeto||'')],
         ['Objetivo Geral', T(marco.objetivo_geral||'')],
         ['Data', new Date().toLocaleDateString('pt-BR')]
       ]);
@@ -365,6 +425,18 @@
       const ts = Date.now();
       const nomeSeguro = (nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').substring(0,30);
       XLSX.writeFile(wb, `Marco_Logico_${nomeSeguro}_${ts}.xlsx`);
+    }
+
+    // Leitura arquivos
+    async function lerPDF(file){
+      const buf = await file.arrayBuffer();
+      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+      let texto=''; for(let p=1;p<=pdf.numPages;p++){ const page=await pdf.getPage(p); const tc=await page.getTextContent(); texto += tc.items.map(i=>i.str).join(' ')+' '; }
+      return sanitizeString(texto);
+    }
+    async function lerDOCX(file){
+      const buf = await file.arrayBuffer(); const res = await mammoth.extractRawText({arrayBuffer:buf}); return sanitizeString(res.value);
     }
 
     // Eventos
@@ -429,9 +501,7 @@
         nomeProjeto_b64: b64utf8(projetoForModel),
         descricaoProposta_b64: b64utf8(propostaForModel),
         objetivosEspecificosTexto_b64: b64utf8(objsTxtForModel),
-        // extras não usados pelo modelo mas úteis para fallback
-        nomeProjeto, descricaoProposta,
-        objetivosEspecificos,
+        nomeProjeto, descricaoProposta, objetivosEspecificos,
         objetivosEspecificosTexto: objetivosToOneLine(objetivosEspecificos),
         filled_at: new Date().toISOString().slice(0,10),
         type: 'marco_logico'
@@ -447,7 +517,18 @@
         if(!resp.ok){ throw new Error(`Erro HTTP: ${resp.status} ${resp.statusText} | ${respText.slice(0,600)}`); }
 
         statusEl.textContent='Interpretando resposta da IA...';
-        const parsed = parseFromProvider(respText);      // Base64 GZIP -> JSON
+        let parsed;
+        try{
+          parsed = parseFromProvider(respText);
+        }catch(e){
+          statusEl.classList.add('error');
+          debugInfo.textContent = 'Diagnóstico do parser:\n' +
+            (e.message||'') + '\n' +
+            (e._snippet?('Prévia normalizada: ' + e._snippet):'');
+          debugInfo.classList.add('show');
+          throw e;
+        }
+
         const normalized = normalizeMarco(parsed, lastPayload);
         const styled = enforceStyle(normalized);
 
@@ -457,10 +538,14 @@
         statusEl.textContent='✓ Marco Lógico gerado com sucesso!';
         statusEl.classList.add('success');
       }catch(err){
-        statusEl.textContent=`Erro: ${err.message}`;
-        statusEl.classList.add('error');
-        debugInfo.textContent = (err && err.stack) ? err.stack : String(err);
-        debugInfo.classList.add('show');
+        if(!statusEl.classList.contains('error')){
+          statusEl.textContent=`Erro: ${err.message}`;
+          statusEl.classList.add('error');
+        }
+        if(!debugInfo.classList.contains('show')){
+          debugInfo.textContent = (err && err.stack) ? err.stack : String(err);
+          debugInfo.classList.add('show');
+        }
       }finally{
         submitBtn.disabled=false;
       }
@@ -468,7 +553,6 @@
   </script>
 </body>
 </html>
-
 
 
 
