@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — Parser robusto</title>
+  <title>Marco Lógico — Front com proxy CORS e parser robusto</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Parser GZIP, Base64 e JSON com fallback</p>
+    <p class="lead">Front com proxy CORS e parser GZIP/Base64/JSON</p>
   </header>
 
   <main class="wrap">
@@ -77,16 +77,17 @@
     </div>
   </main>
 
+  <!-- libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
     // ====== CONFIG ======
-    const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
-    // Usa proxy CORS sempre para garantir bytes legíveis no GitHub Pages
-    const CORS_PROXY = "https://cors.isomorphic-git.org/";
+    // Substitua pela URL do seu Worker do Cloudflare (proxy CORS) que repassa ao Make.
+    // Exemplo: "https://proxy-make-marco-logico.seuusuario.workers.dev"
+    const WEBHOOK_URL = "https://proxy-make-marco-logico.seuusuario.workers.dev";
 
-    // ====== UI OEs ======
+    // ====== UI: gerar campos para OEs (apenas TÍTULO) ======
     const nOE = document.getElementById('nOE');
     const oesDiv = document.getElementById('oes');
     nOE.addEventListener('change', () => {
@@ -117,7 +118,6 @@
       if(i!==-1 && j!==-1 && j>i) return txt.slice(i, j+1);
       return txt;
     }
-    // aceita blocos menores também
     function collectAllB64(raw){
       const txt = String(raw||"");
       const rx = /[A-Za-z0-9+/_=-]{16,}/g;
@@ -162,13 +162,11 @@
         }catch(e){ diag.steps.push("bytes-gzip-failed"); }
       }
 
-      // B) Texto direto a partir dos bytes
+      // B) Texto direto
       let textFull = "";
       if (bytes && bytes.length){
         try{ textFull = utf8Decode(bytes); }catch{ textFull = ""; }
       }
-
-      // B0) resposta vazia
       if (!textFull || !textFull.trim()){
         throw Object.assign(new Error("Resposta vazia"), {diag});
       }
@@ -182,7 +180,7 @@
         return {ok:true, data:obj, diag};
       }catch(e){ diag.steps.push("bytes-text-json-failed"); }
 
-      // B2) Se for um JSON com campo b64
+      // B2) JSON com campo Base64
       try{
         const objProbe = JSON.parse(sliceToJsonEnvelope(textFull));
         const b64Fields = ["marco_logico_b64","body","data","file","content","payload","bytes","response"];
@@ -222,13 +220,12 @@
         diag.steps.push("scan-b64-none");
       }catch(e){ diag.steps.push("scan-b64-failed"); }
 
-      // B4) Último recurso, retorna texto para debug
       diag.stage = "text-fallback";
       diag.preview = textFull.slice(0,200);
       throw Object.assign(new Error("Falha ao interpretar resposta do provedor"), {diag});
     }
 
-    // ====== Prévia ======
+    // ====== Prévia em tabela ======
     function renderPreview(ml){
       const tb = document.querySelector('#tbl tbody'); tb.innerHTML = "";
       const push = (k,v)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${k}</b></td><td>${v||''}</td>`; tb.appendChild(tr); };
@@ -278,7 +275,7 @@
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
-    // ====== Envio + parsing ======
+    // ====== Envio ao proxy + parsing ======
     const frm = document.getElementById('frm');
     const statusEl = document.getElementById('status');
     const diagBox = document.getElementById('diagBox');
@@ -286,28 +283,6 @@
     let lastML = null;
 
     dlBtn.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value); });
-
-    async function postViaProxy(url, payload){
-      // Proxy que aceita POST por prefixo de URL
-      const target = CORS_PROXY + url;
-      const res = await fetch(target,{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Accept':'*/*'},
-        body: JSON.stringify(payload),
-        mode: 'cors',
-        redirect: 'follow',
-        cache: 'no-store',
-      });
-      const info = {
-        status: res.status,
-        ok: res.ok,
-        type: res.type,
-        contentType: res.headers.get('content-type')||null
-      };
-      let buf = new Uint8Array(0);
-      try{ buf = new Uint8Array(await res.arrayBuffer()); }catch{}
-      return {res, buf, info};
-    }
 
     frm.addEventListener('submit', async (e)=>{
       e.preventDefault();
@@ -341,20 +316,47 @@
           edital: editalText
         };
 
-        // sempre via proxy para contornar CORS do Make
-        const {res, buf, info} = await postViaProxy(WEBHOOK_URL, payload);
+        const res = await fetch(WEBHOOK_URL,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload),
+          mode: 'cors',
+          redirect: 'follow',
+          cache: 'no-store'
+        });
 
-        if (info.status === 204 || (buf && buf.length === 0)){
-          throw Object.assign(new Error("Resposta vazia do provedor"), {diag:{stage:"no-bytes",info}});
-        }
+        const contentType = res.headers.get('content-type')||'';
+        const buf = new Uint8Array(await res.arrayBuffer());
+
         if(!res.ok){
           let preview = "";
           try{ preview = utf8Decode(buf).slice(0,200); }catch{}
-          throw new Error(`HTTP ${info.status} | ${preview}`);
+          throw new Error(`HTTP ${res.status} | ${preview}`);
+        }
+        if(!buf || !buf.length){
+          throw Object.assign(new Error("Resposta vazia"), {diag:{stage:"no-bytes",contentType}});
         }
 
         statusEl.textContent = "Interpretando resposta...";
-        const parsed = parseProviderResponseFull(buf, info.contentType);
+        // Tenta JSON direto se o proxy retornou application/json
+        if (contentType.includes('application/json')){
+          try{
+            const text = utf8Decode(buf);
+            const obj = JSON.parse(sliceToJsonEnvelope(text));
+            const ml = obj?.marco_logico || obj;
+            if(!ml || !ml.objetivos_especificos){ throw new Error("JSON sem campo 'marco_logico' válido."); }
+            lastML = ml;
+            renderPreview(ml);
+            statusEl.textContent = "✓ OK";
+            statusEl.classList.add('success');
+            diagBox.style.display='block';
+            diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({stage:"json-direct", contentType},null,2);
+            return;
+          }catch(e){}
+        }
+
+        // Fallback robusto
+        const parsed = parseProviderResponseFull(buf, contentType);
         const data = parsed.data;
         const ml = data?.marco_logico || data;
         if(!ml || !ml.objetivos_especificos){ throw new Error("JSON sem campo 'marco_logico' válido."); }
@@ -365,7 +367,7 @@
         statusEl.classList.add('success');
 
         diagBox.style.display='block';
-        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({parsed:parsed.diag, responseInfo:info},null,2);
+        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify(parsed.diag,null,2);
       }catch(err){
         statusEl.textContent = "Erro: " + err.message;
         statusEl.classList.add('error');
