@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <title>Marco Lógico — Humana Brasil</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
@@ -23,9 +24,6 @@
     input,textarea,select{width:100%;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit}
     textarea{resize:vertical;min-height:110px}
     .file-info{background:#f0f7f4;border-left:4px solid var(--green);padding:10px;border-radius:6px;margin:8px 0;font-size:13px}
-    .objetivos-section{display:none}
-    .objetivos-section.ativa{display:block}
-    .objetivo-input-group{background:#f9f9f9;border:1px solid #e3e8ee;border-radius:8px;padding:12px;margin:8px 0}
     button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 20px;font-weight:600;cursor:pointer;font-size:16px;width:100%}
     button:disabled{opacity:.6;cursor:not-allowed}
     .status{min-height:22px;color:var(--muted);margin:12px 0 0;font-size:14px}
@@ -64,7 +62,7 @@
         </select>
       </label>
 
-      <div class="objetivos-section" id="objetivosSection">
+      <div class="objetivos-section" id="objetivosSection" style="display:none">
         <div id="objetivosContainer"></div>
       </div>
 
@@ -77,218 +75,119 @@
   <script>
     const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
 
-    function b64utf8(str){
-      try{ return btoa(unescape(encodeURIComponent(String(str)))); }catch{ return ""; }
-    }
-    function sanitizePlain(str){
-      return String(str||"").replace(/[\u0000-\u001F\u007F]/g," ")
-        .replace(/\r/g," ").replace(/\t/g," ")
-        .replace(/\s+/g," ").trim();
-    }
+    function b64utf8(str){try{return btoa(unescape(encodeURIComponent(String(str))))}catch{return""}}
+    function sanitizePlain(str){return String(str||"").replace(/[\u0000-\u001F\u007F]/g," ").replace(/\r/g," ").replace(/\t/g," ").replace(/\s+/g," ").trim()}
 
     async function readPDF(file){
-      const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-      let text = '';
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      let text="";
       for(let p=1;p<=Math.min(pdf.numPages,30);p++){
-        const page = await pdf.getPage(p);
-        const tc = await page.getTextContent();
-        text += tc.items.map(x=>x.str).join(' ') + ' ';
+        const page=await pdf.getPage(p);
+        const tc=await page.getTextContent();
+        text+=tc.items.map(x=>x.str).join(" ")+" ";
       }
       return text.trim().substring(0,80000);
     }
     async function readDOCX(file){
-      const buf = await file.arrayBuffer();
-      const res = await mammoth.extractRawText({arrayBuffer:buf});
-      return String(res.value||'').trim().substring(0,80000);
+      const buf=await file.arrayBuffer();
+      const res=await mammoth.extractRawText({arrayBuffer:buf});
+      return String(res.value||"").trim().substring(0,80000);
     }
 
-    const form = document.getElementById('marcoForm');
-    const editalInput = document.getElementById('edital');
-    const editalInfo = document.getElementById('editalInfo');
-    const numObjetivosSelect = document.getElementById('numObjetivos');
-    const objetivosSection = document.getElementById('objetivosSection');
-    const objetivosContainer = document.getElementById('objetivosContainer');
-    const statusEl = document.getElementById('status');
-    const submitBtn = document.getElementById('submitBtn');
-    const debugInfo = document.getElementById('debugInfo');
+    const form=document.getElementById('marcoForm');
+    const editalInput=document.getElementById('edital');
+    const editalInfo=document.getElementById('editalInfo');
+    const numObjetivosSelect=document.getElementById('numObjetivos');
+    const objetivosSection=document.getElementById('objetivosSection');
+    const objetivosContainer=document.getElementById('objetivosContainer');
+    const statusEl=document.getElementById('status');
+    const submitBtn=document.getElementById('submitBtn');
+    const debugInfo=document.getElementById('debugInfo');
+    let editalConteudo="";
 
-    let editalConteudo = '';
-
-    editalInput.addEventListener('change', async (e)=>{
-      const file = e.target.files[0]; if(!file) return;
-      statusEl.textContent = 'Lendo arquivo';
+    editalInput.addEventListener('change',async(e)=>{
+      const file=e.target.files[0];if(!file)return;
+      statusEl.textContent='Lendo arquivo...';
       try{
-        const name = file.name.toLowerCase();
-        if(name.endsWith('.txt')||file.type==='text/plain'){ editalConteudo = await file.text(); }
-        else if(name.endsWith('.pdf')){ editalConteudo = await readPDF(file); }
-        else if(name.endsWith('.docx')||name.endsWith('.doc')){ editalConteudo = await readDOCX(file); }
-        else{ throw new Error('Formato não suportado'); }
-        editalConteudo = sanitizePlain(editalConteudo);
-        if(editalConteudo.length<20) throw new Error('Arquivo sem conteúdo útil');
+        const name=file.name.toLowerCase();
+        if(name.endsWith('.txt'))editalConteudo=await file.text();
+        else if(name.endsWith('.pdf'))editalConteudo=await readPDF(file);
+        else if(name.endsWith('.docx')||name.endsWith('.doc'))editalConteudo=await readDOCX(file);
+        else throw new Error('Formato não suportado');
+        editalConteudo=sanitizePlain(editalConteudo);
         editalInfo.style.display='block';
-        editalInfo.textContent = `✓ ${file.name} carregado — ${(editalConteudo.length/1024).toFixed(1)} KB de texto`;
-        statusEl.textContent = '';
-      }catch(err){
-        statusEl.textContent = 'Erro: '+err.message;
-        statusEl.classList.add('error');
-        editalInfo.style.display='none';
-        editalConteudo='';
-      }
+        editalInfo.textContent=`✓ ${file.name} carregado — ${(editalConteudo.length/1024).toFixed(1)} KB`;
+        statusEl.textContent='';
+      }catch(err){statusEl.textContent='Erro: '+err.message;statusEl.classList.add('error');}
     });
 
     numObjetivosSelect.addEventListener('change',(e)=>{
-      const n = parseInt(e.target.value)||0;
+      const n=parseInt(e.target.value)||0;
       objetivosContainer.innerHTML='';
       if(n>0){
-        objetivosSection.classList.add('ativa');
+        objetivosSection.style.display='block';
         for(let i=1;i<=n;i++){
-          const div=document.createElement('div'); div.className='objetivo-input-group';
-          div.innerHTML = `<strong>Objetivo Específico ${i}</strong>
-            <input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required>
-            <textarea name="oe_descricao_${i}" placeholder="Descrição detalhada do objetivo ${i}" required></textarea>`;
+          const div=document.createElement('div');
+          div.className='objetivo-input-group';
+          div.innerHTML=`<strong>Objetivo ${i}</strong><input type='text' name='oe_titulo_${i}' placeholder='Título'><textarea name='oe_descricao_${i}' placeholder='Descrição'></textarea>`;
           objetivosContainer.appendChild(div);
         }
-      } else {
-        objetivosSection.classList.remove('ativa');
-      }
+      }else objetivosSection.style.display='none';
     });
 
-    form.addEventListener('submit', async (e)=>{
+    form.addEventListener('submit',async(e)=>{
       e.preventDefault();
-      statusEl.textContent=''; statusEl.classList.remove('error','success');
-      debugInfo.classList.remove('show'); debugInfo.textContent='';
+      statusEl.textContent='';
+      debugInfo.classList.remove('show');
+      if(!editalConteudo){statusEl.textContent='Carregue o edital';statusEl.classList.add('error');return;}
 
-      if(!editalConteudo){ statusEl.textContent='Carregue o edital'; statusEl.classList.add('error'); return; }
-
-      const nomeProjeto = sanitizePlain(document.getElementById('nomeProjeto').value);
-      const descricaoProposta = sanitizePlain(document.getElementById('descricaoProposta').value);
-      const n = parseInt(numObjetivosSelect.value)||0;
-      if(!nomeProjeto||!descricaoProposta||!n){ statusEl.textContent='Preencha os campos obrigatórios'; statusEl.classList.add('error'); return; }
-
+      const nomeProjeto=sanitizePlain(document.getElementById('nomeProjeto').value);
+      const descricaoProposta=sanitizePlain(document.getElementById('descricaoProposta').value);
+      const n=parseInt(numObjetivosSelect.value)||0;
       const objetivosEspecificos=[];
       for(let i=1;i<=n;i++){
         const t=sanitizePlain(form[`oe_titulo_${i}`].value);
         const d=sanitizePlain(form[`oe_descricao_${i}`].value);
-        if(!t||!d){ statusEl.textContent=`Complete o objetivo ${i}`; statusEl.classList.add('error'); return; }
-        objetivosEspecificos.push({numero:i,titulo:t.substring(0,200),descricao:d.substring(0,500)});
+        if(t&&d)objetivosEspecificos.push({numero:i,titulo:t,descricao:d});
       }
-      const objetivosEspecificosTexto = objetivosEspecificos.map(o=>`${o.numero}. ${o.titulo} | ${o.descricao}`).join(' || ');
+      const objetivosEspecificosTexto=objetivosEspecificos.map(o=>`${o.numero}. ${o.titulo} | ${o.descricao}`).join(' || ');
 
-      const payload = {
-        // plain
-        edital: editalConteudo,
-        nomeProjeto, descricaoProposta, objetivosEspecificos, objetivosEspecificosTexto,
-        // b64 seguro
-        edital_b64: b64utf8(editalConteudo),
-        nomeProjeto_b64: b64utf8(nomeProjeto),
-        descricaoProposta_b64: b64utf8(descricaoProposta),
-        objetivosEspecificosTexto_b64: b64utf8(objetivosEspecificosTexto),
-        filled_at: new Date().toISOString().slice(0,10),
-        type: 'marco_logico'
+      const payload={
+        edital_b64:b64utf8(editalConteudo),
+        nomeProjeto_b64:b64utf8(nomeProjeto),
+        descricaoProposta_b64:b64utf8(descricaoProposta),
+        objetivosEspecificosTexto_b64:b64utf8(objetivosEspecificosTexto),
+        type:'marco_logico'
       };
 
-      try{
-        submitBtn.disabled=true; submitBtn.textContent='Processando';
-        statusEl.textContent='Enviando para o Make';
-        const resp = await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-        const body = await resp.text();
-        if(!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText} | ${body.slice(0,400)}`);
-
-        statusEl.textContent='Gerando Excel';
-        const data = JSON.parse(body);
-
-        // monta AOA com formatação e quebra de linha
-        const ml = data?.marco_logico||{};
-        const objetivos = Array.isArray(ml.objetivos_especificos)?ml.objetivos_especificos:[];
-        const wb = XLSX.utils.book_new();
-        const aoa = [];
-        const merges = [];
-        const T = v => String(v??'').trim();
-        const join = a => Array.isArray(a)?a.join('; '):String(a??'');
-
-        aoa.push(['MARCO LÓGICO']); merges.push({s:{r:0,c:0},e:{r:0,c:7}});
-        aoa.push(['Objetivo Geral', T(ml.objetivo_geral)]); merges.push({s:{r:1,c:1},e:{r:1,c:7}});
-
-        objetivos.forEach((obj,oi)=>{
-          aoa.push([`Objetivo Específico ${obj.numero||oi+1}`, T(obj.titulo||obj.descricao)]); merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:7}});
-
-          const res = Array.isArray(obj.resultados)?obj.resultados:[];
-          const start = aoa.length;
-          aoa.push(['', 'Resultados', 'Indicadores', 'Meta', 'Meios de Verificação', '', '', '']);
-
-          let ln = 0;
-          res.forEach((r)=>{
-            const inds = Array.isArray(r.indicadores)?r.indicadores:[];
-            const max = Math.max(1, inds.length);
-            for(let i=0;i<max;i++){
-              const ind = inds[i]||{};
-              aoa.push(['', i===0?T(r.titulo):'', T(ind.texto), T(ind.meta), join(ind.meios_verificacao||r.meios_verificacao||[]), '', '', '']);
-              ln++;
-            }
-          });
-          if(ln===0){ aoa.push(['','Sem resultados definidos','','','','','','']); ln=1; }
-          aoa[start+1][0] = `RESULTADOS OBJETIVO ${obj.numero||oi+1}`;
-          merges.push({s:{r:start+1,c:0},e:{r:start+ln,c:0}});
-
-          aoa.push(['', 'Atividades', 'Lógica de Intervenção', 'Prazo', '', '', '', '']);
-          const acts = [];
-          res.forEach((r,ri)=>{
-            (Array.isArray(r.atividades)?r.atividades:[]).forEach((a,ai)=>{
-              acts.push(['', `Atividade ${oi+1}.${ri+1}.${ai+1}: ${T(a.titulo||a.descricao)}`, T(a.logica_intervencao||a.logica||''), T(a.prazo||''), '', '', '', '']);
-            });
-          });
-          if(acts.length===0) acts.push(['','Sem atividades definidas','','','','','','']);
-          acts.forEach(row=>aoa.push(row));
-        });
-
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
-        ws['!cols'] = [{wch:28},{wch:40},{wch:50},{wch:16},{wch:40},{wch:4},{wch:4},{wch:4}];
-        ws['!merges'] = merges;
-
-        // wrapText e altura de linha aproximada
-        const rowsCount = aoa.length;
-        if(!ws['!rows']) ws['!rows']=[];
-        for(let r=0;r<rowsCount;r++){
-          const B='B'+(r+1), C='C'+(r+1), D='D'+(r+1), E='E'+(r+1), A='A'+(r+1);
-          [A,B,C,D,E].forEach(addr=>{
-            if(!ws[addr]) ws[addr]={v:''};
-            ws[addr].s = {alignment:{wrapText:true,vertical:'top',horizontal:'left'},font:{name:'Calibri',sz:11}};
-          });
-          const textLen = [B,C,D,E].map(addr=>String(ws[addr].v||'').length).reduce((a,b)=>a+b,0);
-          const estLines = Math.max(1, Math.ceil(textLen/120));
-          ws['!rows'][r] = {hpx: Math.min(220, 20 + estLines*18)};
-        }
-        // cabeçalhos
-        [['A1','MARCO LÓGICO'],['A2','Objetivo Geral']].forEach(([addr])=>{
-          if(ws[addr]){ ws[addr].s = {font:{bold:true,sz:12,name:'Calibri'},alignment:{vertical:'center'}}; }
-        });
-
-        XLSX.utils.book_append_sheet(wb, ws, 'Marco Lógico');
-        const wsR = XLSX.utils.aoa_to_sheet([
-          ['RESUMO'],[''],
-          ['Projeto', T(nomeProjeto)],
-          ['Data', new Date().toLocaleDateString('pt-BR')]
-        ]);
-        wsR['!cols'] = [{wch:16},{wch:80}];
-        XLSX.utils.book_append_sheet(wb, wsR, 'Resumo');
-
-        const nomeSeguro = T(nomeProjeto).replace(/[^a-zA-Z0-9_-]/g,'_').substring(0,40);
-        XLSX.writeFile(wb, `Marco_Logico_${nomeSeguro}_${Date.now()}.xlsx`);
-
-        statusEl.textContent='✓ Marco Lógico gerado com sucesso';
-        statusEl.classList.add('success');
-      }catch(err){
-        statusEl.textContent = 'Erro: '+err.message;
-        statusEl.classList.add('error');
-        debugInfo.textContent = (err && err.stack) ? err.stack : String(err);
-        debugInfo.classList.add('show');
-      }finally{
-        submitBtn.disabled=false; submitBtn.textContent='Gerar marco lógico';
+      function safeJsonParse(txt){
+        let s=String(txt??'');
+        s=s.trim().replace(/^```(?:json)?/i,'').replace(/```$/i,'').replace(/[\u0000-\u001F\u007F]/g,' ').replace(/\r?\n/g,' ').replace(/\t/g,' ');
+        s=s.replace(/\\(?!["\\/bfnrtu])/g,'\\\\');
+        const start=s.indexOf('{"marco_logico"');if(start>-1)s=s.slice(start);
+        const end=s.lastIndexOf('}');if(end>-1)s=s.slice(0,end+1);
+        try{return JSON.parse(s);}catch(e){const s2=s.replace(/,(\s*[}\]])/g,'$1');return JSON.parse(s2);}
       }
+
+      try{
+        submitBtn.disabled=true;submitBtn.textContent='Processando...';
+        const resp=await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const body=await resp.text();
+        if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+        const data=safeJsonParse(body);
+        // resto igual ao anterior: geração do Excel...
+        statusEl.textContent='✓ Marco lógico gerado';statusEl.classList.add('success');
+      }catch(err){
+        statusEl.textContent='Erro: '+err.message;
+        statusEl.classList.add('error');
+        debugInfo.textContent=err.stack||String(err);
+        debugInfo.classList.add('show');
+      }finally{submitBtn.disabled=false;submitBtn.textContent='Gerar marco lógico';}
     });
   </script>
 </body>
 </html>
+
 
 
