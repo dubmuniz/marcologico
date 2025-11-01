@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — Parser tolerante (H4sIA/JSON)</title>
+  <title>Marco Lógico — Resposta JSON/URL/B64</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -22,8 +22,7 @@
     button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:600;cursor:pointer;font-size:16px}
     button:disabled{opacity:.6;cursor:not-allowed}
     .status{min-height:22px;color:var(--muted);margin:10px 0 0;font-size:14px}
-    .status.error{color:#c62828}
-    .status.success{color:var(--green)}
+    .status.error{color:#c62828}.status.success{color:var(--green)}
     .debug{background:#f7f7f7;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;display:none}
     .table{margin-top:14px;background:#fff;border:1px solid #eee;border-radius:10px;overflow:auto}
     table{width:100%;border-collapse:collapse;font-size:14px}
@@ -35,7 +34,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Aceita JSON direto ou Base64+GZIP (H4sIA…)</p>
+    <p class="lead">Espera JSON direto, URL de JSON ou JSON com campo Base64+GZIP</p>
   </header>
 
   <main class="wrap">
@@ -81,10 +80,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
-    // ====== CONFIG ======
     const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
 
-    // ====== UI OEs: só título ======
     const nOE = document.getElementById('nOE');
     const oesDiv = document.getElementById('oes');
     nOE.addEventListener('change', () => {
@@ -103,174 +100,53 @@
       }
     });
 
-    // ====== Utils ======
+    function utf8Decode(bytes){ try{ return new TextDecoder('utf-8').decode(bytes); }catch{ return String.fromCharCode.apply(null, bytes); } }
     function isGzip(bytes){ return bytes && bytes.length>2 && bytes[0]===0x1f && bytes[1]===0x8b; }
-    function utf8Decode(bytes){
-      try{ return new TextDecoder('utf-8',{fatal:false}).decode(bytes); }
-      catch{ return String.fromCharCode.apply(null, bytes); }
-    }
-    function sliceToJsonEnvelope(txt){
-      if(!txt) return "";
-      const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
-      if(i!==-1 && j!==-1 && j>i) return txt.slice(i, j+1);
-      return txt;
-    }
-    function collectAllB64(raw){
-      const txt = String(raw||"");
-      const rx = /[A-Za-z0-9+/_=-]{12,}/g; // aceita blocos menores
-      const out = []; let m;
-      while((m = rx.exec(txt)) !== null){ out.push(m[0]); }
-      return out;
+    function sliceToJsonEnvelope(txt){ const i=txt.indexOf("{"), j=txt.lastIndexOf("}"); return (i!==-1&&j!==-1&&j>i)?txt.slice(i,j+1):txt; }
+    function cleanB64Piece(s){ if(!s) return ""; let t=String(s).replace(/[\u200B-\u200F\u2028\u2029]/g,"").replace(/\s+/g,"").replace(/-/g,"+").replace(/_/g,"/").replace(/[^A-Za-z0-9+/=]/g,""); const m=t.length%4; if(m) t+="=".repeat(4-m); return t; }
+    function b64ToBytesLoose(s){ s=cleanB64Piece(s); const bin=atob(s); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; }
+
+    function decodeB64GzipOrThrow(str){
+      // se o servidor mandou H4sIA... incompleto, aborta com uma mensagem clara
+      const MIN_LEN = 200; // JSON útil em gzip costuma passar disso
+      if (str.length < MIN_LEN) throw Object.assign(new Error("Base64 GZIP truncado pelo servidor"), {truncated:true});
+      const b = b64ToBytesLoose(str);
+      const bytes = isGzip(b) ? pako.ungzip(b) : b;
+      return utf8Decode(bytes);
     }
 
-    // Base64 "loose" -> bytes (ignora chars não-base64, repõe padding)
-    function b64LooseToBytes(str){
-      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      const map = new Map(); for (let i=0;i<alphabet.length;i++) map.set(alphabet[i], i);
-      let s = (str||"").replace(/[\s\r\n\t\u200B-\u200F\u2028\u2029]/g,"")
-                       .replace(/-/g,"+").replace(/_/g,"/");
-      // remove tudo que não é base64
-      s = s.replace(/[^A-Za-z0-9+/=]/g,"");
-      // repõe padding
-      const m = s.length % 4; if (m) s += "=".repeat(4-m);
-
-      let buffer = 0, bits = 0;
-      const out = [];
-      for (let i=0; i<s.length; i++){
-        const ch = s[i];
-        if (ch === "="){ break; }
-        const val = map.get(ch);
-        if (val === undefined) continue;
-        buffer = (buffer << 6) | val;
-        bits += 6;
-        if (bits >= 8){
-          bits -= 8;
-          out.push((buffer >> bits) & 0xFF);
-        }
-      }
-      return new Uint8Array(out);
-    }
-
-    function cleanB64Piece(s){
-      if(!s) return "";
-      let t = String(s)
-        .replace(/^```(?:json)?/i,"").replace(/```$/i,"")
-        .replace(/^['"]+|['"]+$/g,"")
-        .replace(/[\u200B-\u200F\u2028\u2029]/g,"")
-        .replace(/\s+/g,"")
-        .replace(/-/g,"+").replace(/_/g,"/")
-        .replace(/[^A-Za-z0-9+/=]/g,"");
-      const m = t.length % 4; if (m) t += "=".repeat(4-m);
-      return t;
-    }
-
-    function tryDecodeB64GzipLoose(b64Like, maxTrim=4096){
-      let s = (b64Like||"").trim();
-      try{ if (/%[0-9A-Fa-f]{2}/.test(s)) s = decodeURIComponent(s); }catch{}
-
-      // tentativa 1: atob padrão após limpeza
+    function parseResponseText(text){
+      // 1) tenta JSON direto
       try{
-        const t = cleanB64Piece(s);
-        const bin = atob(t);
-        const b = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) b[i]=bin.charCodeAt(i);
-        const inner = isGzip(b) ? pako.ungzip(b) : b;
-        return utf8Decode(inner);
+        const cand = sliceToJsonEnvelope(text);
+        return JSON.parse(cand);
       }catch{}
 
-      // tentativa 2: decodificador "loose"
+      // 2) tenta JSON com campo URL
       try{
-        const b = b64LooseToBytes(s);
-        const inner = isGzip(b) ? pako.ungzip(b) : b;
-        return utf8Decode(inner);
+        const probe = JSON.parse(sliceToJsonEnvelope(text));
+        if (probe && typeof probe.url === "string") return { __fetch__: probe.url };
       }catch{}
 
-      // tentativa 3: cortes progressivos grandes (tolerância a truncamento)
-      for (let cut=1; cut<=maxTrim && s.length>32; cut++){
-        try{
-          let cand = s.slice(0, s.length - cut);
-          const b = b64LooseToBytes(cand);
-          const inner = isGzip(b) ? pako.ungzip(b) : b;
-          return utf8Decode(inner);
-        }catch{}
-      }
-      throw new Error("decode-b64-loose-failed");
-    }
-
-    // ====== Parser principal ======
-    function parseProviderResponseFull(bytes, contentTypeHeader){
-      const diag = { stage:"start", gunzip:false, steps:[], contentType: contentTypeHeader||null, preview:"" };
-
-      // Texto completo
-      let textFull = "";
-      if (bytes && bytes.length){ try{ textFull = utf8Decode(bytes).trim(); }catch{} }
-      if (!textFull){ throw Object.assign(new Error("Resposta vazia"), {diag}); }
-
-      // A) JSON direto
+      // 3) tenta JSON com campo Base64
       try{
-        const cand = sliceToJsonEnvelope(textFull.replace(/^\uFEFF/,"")).trim();
-        const obj = JSON.parse(cand);
-        diag.stage="json-direct";
-        diag.preview=cand.slice(0,160);
-        return {ok:true, data:obj, diag};
-      }catch(e){ diag.steps.push("json-direct-failed"); }
+        const probe = JSON.parse(sliceToJsonEnvelope(text));
+        const k = "marco_logico_b64";
+        if (probe && typeof probe[k] === "string"){
+          const innerText = decodeB64GzipOrThrow(probe[k]);
+          return JSON.parse(sliceToJsonEnvelope(innerText));
+        }
+      }catch{}
 
-      // B) Parecendo Base64/H4sIA
-      const looksB64 = /^H4sIA|^[A-Za-z0-9+/=_-]+$/.test(textFull);
-      if (looksB64){
-        try{
-          const innerText = tryDecodeB64GzipLoose(textFull, 4096);
-          const cand = sliceToJsonEnvelope(innerText).trim();
-          const obj = JSON.parse(cand);
-          diag.stage = "fulltext-b64-loose";
-          diag.gunzip = true;
-          diag.preview = cand.slice(0,160);
-          return { ok:true, data:obj, diag };
-        }catch(e){ diag.steps.push("fulltext-b64-loose-failed"); }
+      // 4) se o corpo TODO parece ser o Base64 H4sIA...
+      if (/^H4sIA/.test(text) || /^[A-Za-z0-9+/=_-]+$/.test(text)){
+        const innerText = decodeB64GzipOrThrow(text);
+        return JSON.parse(sliceToJsonEnvelope(innerText));
       }
 
-      // C) JSON com campo b64
-      try{
-        const probe = JSON.parse(sliceToJsonEnvelope(textFull));
-        const keys = ["marco_logico_b64","body","data","file","content","payload","bytes","response"];
-        for (const k of keys){
-          const v = probe && probe[k];
-          if (typeof v === "string" && v.length >= 12){
-            try{
-              const innerText = tryDecodeB64GzipLoose(v, 4096);
-              const cand = sliceToJsonEnvelope(innerText).trim();
-              const obj = JSON.parse(cand);
-              diag.stage = `json-field-${k}-b64-loose`;
-              diag.gunzip = true;
-              diag.preview = cand.slice(0,160);
-              return { ok:true, data:obj, diag };
-            }catch(e){}
-          }
-        }
-        diag.steps.push("json-field-b64-loose-failed");
-      }catch(e){ diag.steps.push("outer-json-probe-failed"); }
-
-      // D) Varredura/união de múltiplos blocos
-      try{
-        const pieces = collectAllB64(textFull);
-        if (pieces.length){
-          const joined = pieces.map(cleanB64Piece).join("");
-          const innerText = tryDecodeB64GzipLoose(joined, 4096);
-          const cand = sliceToJsonEnvelope(innerText).trim();
-          const obj = JSON.parse(cand);
-          diag.stage = "scan-b64-joined-loose";
-          diag.gunzip = true;
-          diag.preview = cand.slice(0,160);
-          return { ok:true, data:obj, diag };
-        }
-        diag.steps.push("scan-b64-none");
-      }catch(e){ diag.steps.push("scan-b64-joined-loose-failed"); }
-
-      diag.stage = "text-fallback";
-      diag.preview = textFull.slice(0,400); // preview maior p/ debug
-      throw Object.assign(new Error("Falha ao interpretar resposta do provedor"), {diag});
+      throw new Error("Formato de resposta não suportado");
     }
 
-    // ====== Prévia ======
     function renderPreview(ml){
       const tb = document.querySelector('#tbl tbody'); tb.innerHTML = "";
       const push = (k,v)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${k}</b></td><td>${v||''}</td>`; tb.appendChild(tr); };
@@ -292,7 +168,6 @@
       document.getElementById('previewBox').style.display = 'block';
     }
 
-    // ====== XLSX ======
     function baixarXlsx(ml, nomeProjeto){
       const wb = XLSX.utils.book_new();
       const aoa=[["MARCO LÓGICO"],["Objetivo Geral", ml.objetivo_geral||""]];
@@ -320,13 +195,11 @@
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
-    // ====== Envio ======
     const frm = document.getElementById('frm');
     const statusEl = document.getElementById('status');
     const diagBox = document.getElementById('diagBox');
     const dlBtn = document.getElementById('dlXlsx');
     let lastML = null;
-
     dlBtn.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value); });
 
     frm.addEventListener('submit', async (e)=>{
@@ -360,47 +233,45 @@
           edital: editalText
         };
 
-        // POST minimalista p/ reduzir preflight
         const res = await fetch(WEBHOOK_URL,{
           method:'POST',
           headers:{'Content-Type':'text/plain;charset=UTF-8'},
           body: JSON.stringify(payload)
         });
 
-        const contentType = res.headers.get('content-type')||'';
         const buf = new Uint8Array(await res.arrayBuffer());
+        const contentType = res.headers.get('content-type')||null;
 
         if(!res.ok){
-          let preview = ""; try{ preview = utf8Decode(buf).slice(0,200); }catch{}
-          throw new Error(`HTTP ${res.status} | ${preview}`);
+          const prev = utf8Decode(buf).slice(0,200);
+          throw new Error(`HTTP ${res.status} | ${prev}`);
         }
-        if(!buf || !buf.length){
-          throw Object.assign(new Error("Resposta vazia"), {diag:{stage:"no-bytes",contentType}});
-        }
+        if(!buf || !buf.length) throw Object.assign(new Error("Resposta vazia"), {diag:{stage:"no-bytes",contentType}});
 
         statusEl.textContent = "Interpretando resposta...";
 
-        // JSON direto
-        if (contentType.includes('application/json')){
-          try{
-            const text = utf8Decode(buf);
-            const obj = JSON.parse(sliceToJsonEnvelope(text));
-            const ml = obj?.marco_logico || obj;
-            if(ml && ml.objetivos_especificos){
-              lastML = ml; renderPreview(ml);
-              statusEl.textContent = "✓ OK"; statusEl.classList.add('success');
-              diagBox.style.display='block';
-              diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({stage:"json-direct", contentType},null,2);
-              return;
-            }
-          }catch(e){}
+        const rawText = utf8Decode(buf).trim();
+        let data = null;
+
+        try{
+          data = parseResponseText(rawText);
+        }catch(err){
+          if (err.truncated){
+            const msg = "O Webhook do Make está devolvendo Base64 GZIP truncado. Mude o módulo final para JSON direto ou `{\"marco_logico_b64\":\"...\"}` dentro de JSON.";
+            throw Object.assign(new Error(msg), {diag:{stage:"truncated-b64", preview: rawText.slice(0,180)}});
+          }
+          throw err;
         }
 
-        // H4sIA/variantes e outros formatos tolerados
-        const parsed = parseProviderResponseFull(buf, contentType);
-        const data = parsed.data;
+        // Se veio URL, baixa
+        if (data && data.__fetch__){
+          const r2 = await fetch(data.__fetch__, {cache:'no-store'});
+          const t2 = await r2.text();
+          data = JSON.parse(sliceToJsonEnvelope(t2));
+        }
+
         const ml = data?.marco_logico || data;
-        if(!ml || !ml.objetivos_especificos){ throw new Error("JSON sem campo 'marco_logico' válido."); }
+        if(!ml || !ml.objetivos_especificos) throw new Error("JSON sem campo 'marco_logico' válido.");
 
         lastML = ml;
         renderPreview(ml);
@@ -408,7 +279,7 @@
         statusEl.classList.add('success');
 
         diagBox.style.display='block';
-        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify(parsed.diag,null,2);
+        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({stage:"done",contentType},null,2);
       }catch(err){
         statusEl.textContent = "Erro: " + err.message;
         statusEl.classList.add('error');
@@ -419,7 +290,6 @@
   </script>
 </body>
 </html>
-
 
 
 
