@@ -75,7 +75,6 @@
     const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
 
     // util
-    const enc = new TextEncoder();
     function b64utf8(str){try{return btoa(unescape(encodeURIComponent(String(str))))}catch{return""}}
     function sanitizePlain(str){return String(str||"").replace(/[\u0000-\u001F\u007F]/g," ").replace(/\r/g," ").replace(/\t/g," ").replace(/\s+/g," ").trim()}
     function isLikelyBase64(s){if(!s) return false; const t=String(s).trim().replace(/\s+/g,''); return /^[A-Za-z0-9+/=]+$/.test(t)&&t.length>=24}
@@ -170,7 +169,7 @@
         }
       }catch(_){}
 
-      // Base64 puro → tenta GZIP → JSON
+      // Base64 puro → GZIP → JSON
       if(isLikelyBase64(raw)){
         const bytes=b64ToBytes(raw);
         const dec=gunzipToString(bytes);
@@ -186,6 +185,51 @@
       try{ return JSON.parse(s); }catch{
         const s2=s.replace(/,(\s*[}\]])/g,'$1'); return JSON.parse(s2);
       }
+    }
+
+    // Helpers: 3 indicadores, 2 atividades
+    function mkIndicadores(base, m6='M6-12'){
+      return [
+        {texto:`${base}: manual publicado`, meta:`1 manual até ${m6}`, meios_verificacao:['link do manual']},
+        {texto:`${base}: oficinas realizadas`, meta:`3 oficinas até ${m6}`, meios_verificacao:['listas de presença']},
+        {texto:`${base}: satisfação média`, meta:`≥ 85% até ${m6}`, meios_verificacao:['pesquisa de satisfação']}
+      ];
+    }
+    function mkAtividades(titulo){
+      return [
+        {titulo:`Planejamento de ${titulo}`, descricao:'escopo, equipe, cronograma', logica_intervencao:'planejamento reduz risco', prazo:'M1-3'},
+        {titulo:`Implementação de ${titulo}`, descricao:'execução em campo', logica_intervencao:'gera entregáveis', prazo:'M3-6'}
+      ];
+    }
+    function ensureComplete(ml, inputs){
+      const out = {objetivo_geral: (ml?.objetivo_geral||inputs?.descricaoProposta||inputs?.nomeProjeto||'não informado'), objetivos_especificos: []};
+      const req = Array.isArray(inputs?.objetivosEspecificos)?inputs.objetivosEspecificos:[];
+      const got = Array.isArray(ml?.objetivos_especificos)?ml.objetivos_especificos:[];
+      const n = Math.max(req.length, got.length, 1);
+      for(let i=0;i<n;i++){
+        const base = got[i]||{};
+        const src = req[i]||{};
+        const titulo = (base.titulo||src.titulo||`Objetivo ${i+1}`).slice(0,80);
+        const descricao = (base.descricao||src.descricao||'não informado').slice(0,160);
+        let resultados = Array.isArray(base.resultados)?base.resultados:[];
+        if(resultados.length===0){
+          resultados = [1,2].map(r=>({
+            titulo:`Resultado ${i+1}.${r}: ${titulo}`,
+            indicadores: mkIndicadores(`Resultado ${i+1}.${r}`),
+            meios_verificacao:['relatório consolidado'],
+            atividades: mkAtividades(`resultado ${i+1}.${r}`)
+          }));
+        }else{
+          resultados = resultados.map((r,ri)=>({
+            titulo: r.titulo||`Resultado ${i+1}.${ri+1}: ${titulo}`,
+            indicadores: (Array.isArray(r.indicadores)&&r.indicadores.length)?r.indicadores:mkIndicadores(`Resultado ${i+1}.${ri+1}`),
+            meios_verificacao: (Array.isArray(r.meios_verificacao)&&r.meios_verificacao.length)?r.meios_verificacao:['relatório consolidado'],
+            atividades: (Array.isArray(r.atividades)&&r.atividades.length)?r.atividades:mkAtividades(`resultado ${i+1}.${ri+1}`)
+          }));
+        }
+        out.objetivos_especificos.push({numero:i+1, titulo, descricao, resultados});
+      }
+      return out;
     }
 
     // XLSX com wrap, alturas dinâmicas e merges.
@@ -244,7 +288,7 @@
         });
         const len = addrs.slice(1).map(a=>String(ws[a].v||'').length).reduce((a,b)=>a+b,0);
         const est = Math.max(1, Math.ceil(len/120));
-        ws['!rows'][r]={hpx: Math.min(260, 22 + est*18)};
+        ws['!rows'][r]={hpx: Math.min(240, 22 + est*18)};
       }
 
       XLSX.utils.book_append_sheet(wb, ws, 'Marco Lógico');
@@ -299,13 +343,12 @@
         if(!resp.ok) throw new Error(`HTTP ${resp.status} | ${body.slice(0,400)}`);
         if (body.includes('"stop_reason":"max_tokens"')) throw new Error('Resposta truncada pelo provedor (max_tokens).');
 
-        const data = parseFromProvider(body);
+        const parsed = parseFromProvider(body);
+        const completed = { marco_logico: ensureComplete(parsed?.marco_logico||{}, {
+          descricaoProposta, nomeProjeto, objetivosEspecificos
+        })};
 
-        // guarda métricas rápidas para debug
-        console.log('ML objetivo_geral:', (data?.marco_logico?.objetivo_geral||'').slice(0,120));
-        console.log('Qtd OEs:', Array.isArray(data?.marco_logico?.objetivos_especificos)?data.marco_logico.objetivos_especificos.length:0);
-
-        gerarXLSX(data, nomeProjeto);
+        gerarXLSX(completed, nomeProjeto);
         statusEl.textContent='✓ Marco lógico gerado com sucesso';
         statusEl.classList.add('success');
       }catch(err){
