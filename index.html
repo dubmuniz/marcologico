@@ -83,11 +83,9 @@
   </main>
 
   <script>
-    // ===== CONFIG =====
     const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
     const MAX_EDITAL = 10000, MAX_PROJ = 400, MAX_PROP = 2000, MAX_OBJS = 4000;
 
-    // ===== UI =====
     const form = document.getElementById('marcoForm');
     const editalInput = document.getElementById('edital');
     const editalInfo = document.getElementById('editalInfo');
@@ -98,28 +96,21 @@
     const submitBtn = document.getElementById('submitBtn');
     const debug = document.getElementById('debug');
 
-    // ===== STATE =====
     let editalConteudo = '';
 
-    // ===== HELPERS =====
     const sanitize = (s)=>s==null?'':String(s).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim();
     const objetivosToLine = (arr)=>Array.isArray(arr)?arr.map(o=>`${o.numero}. ${sanitize(o.titulo).replace(/"/g,'\\"')} | ${sanitize(o.descricao).replace(/"/g,'\\"')}`).join(' || '):'';
 
     function showError(msg, extra=''){
       statusEl.textContent = msg;
       statusEl.classList.add('error');
-      if(extra){
-        debug.textContent = extra;
-        debug.classList.add('show');
-      }
+      if(extra){ debug.textContent = extra; debug.classList.add('show'); }
     }
     function clearError(){
       statusEl.classList.remove('error','success');
-      debug.classList.remove('show');
-      debug.textContent = '';
+      debug.classList.remove('show'); debug.textContent = '';
     }
 
-    // ===== FILE READERS =====
     async function readPDF(file){
       const buf = await file.arrayBuffer();
       pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -133,7 +124,6 @@
       return sanitize(res.value);
     }
 
-    // ===== BASE64 / GZIP PARSER (ROBUSTO, SEM COALESCE) =====
     function normalizeB64(s){
       if(!s) return '';
       let t = String(s).trim();
@@ -156,84 +146,90 @@
       try{ return new TextDecoder().decode(pako.inflate(bytes)); }catch(e){}
       return null;
     }
-    function extractB64Concat(raw){
+    function collectB64(raw){
       const t = String(raw||'');
-      // Concatena todos os blocos longos; lida com respostas em múltiplos pedaços
-      const matches = [...t.replace(/\s+/g,'').matchAll(/[A-Za-z0-9+/_-]{60,}={0,2}/g)].map(m=>m[0]);
-      if(matches.length>0) return {type:'b64-joined', value: matches.join(''), count: matches.length};
-      if(t.trim().startsWith('{')) return {type:'json-direct', value: t};
-      return {type:'none', value: t};
+      const arr = [...t.replace(/\s+/g,'').matchAll(/[A-Za-z0-9+/_-]{40,}={0,2}/g)].map(m=>m[0]);
+      return arr;
     }
-    function parseFromProvider(raw){
-      const pick = extractB64Concat(raw);
-      if(pick.type === 'json-direct'){
+    function tryParseJSON(s){
+      try{
+        const j = JSON.parse(s);
+        if(j && j.marco_logico) return j;
+        if(j && j.marcoLogico) return {marco_logico:j.marcoLogico};
+      }catch(_){}
+      if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
         try{
-          const j = JSON.parse(String(pick.value).trim());
-          if(j && j.marco_logico) return j;
-          if(j && j.marcoLogico) return {marco_logico:j.marcoLogico};
+          const unq = JSON.parse(s);
+          const j2 = JSON.parse(unq);
+          if(j2 && j2.marco_logico) return j2;
+          if(j2 && j2.marcoLogico) return {marco_logico:j2.marcoLogico};
         }catch(_){}
+      }
+      const i = s.indexOf('{'); const l = s.lastIndexOf('}');
+      if(i!==-1 && l!==-1 && l>i){
+        try{
+          const j3 = JSON.parse(s.slice(i,l+1).replace(/,(\s*[}\]])/g,'$1'));
+          if(j3 && j3.marco_logico) return j3;
+          if(j3 && j3.marcoLogico) return {marco_logico:j3.marcoLogico};
+        }catch(_){}
+      }
+      return null;
+    }
+
+    function parseFromProvider(raw){
+      const pieces = collectB64(raw);
+      if(pieces.length===0){
+        const trimmed = String(raw||'').trim();
+        if(trimmed.startsWith('{')){
+          const j = tryParseJSON(trimmed);
+          if(j) return j;
+        }
         throw new Error('no-b64-found');
       }
-      if(pick.type === 'b64-joined'){
-        const clean = normalizeB64(pick.value);
-        let bytes;
+
+      let joined = normalizeB64(pieces.join(''));
+      let currentBytes, currentText = null;
+      let passes = 0;
+      const maxPasses = 3;
+      let diag = [];
+
+      while(passes < maxPasses){
+        passes++;
         try{
-          bytes = b64ToBytes(clean);
-        }catch(_){
-          const e = new Error('Falha ao decodificar Base64'); e._detail='invalid-b64';
-          throw e;
+          currentBytes = b64ToBytes(joined);
+        }catch(e){
+          const err = new Error('Falha ao decodificar Base64'); err._detail = `pass=${passes} invalid-b64`;
+          throw err;
         }
-        let text = ungzipOrInflate(bytes);
-        if(!text){ // fallback: Base64 era JSON plano
-          try{ text = new TextDecoder().decode(bytes); }catch(_){}
+
+        currentText = ungzipOrInflate(currentBytes);
+        if(!currentText){
+          try{ currentText = new TextDecoder().decode(currentBytes); }catch(_){}
         }
-        if(text){
-          let s = text.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
-
-          // JSON bruto
-          try{
-            const j = JSON.parse(s);
-            if(j && j.marco_logico) return j;
-            if(j && j.marcoLogico) return {marco_logico:j.marcoLogico};
-          }catch(_){}
-
-          // JSON stringificado entre aspas
-          if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-            try {
-              const unq = JSON.parse(s);
-              const j2 = JSON.parse(unq);
-              if(j2 && j2.marco_logico) return j2;
-              if(j2 && j2.marcoLogico) return {marco_logico:j2.marcoLogico};
-            } catch(_) {}
-          }
-
-          // recorte do primeiro '{' ao último '}'
-          const first = s.indexOf('{'); const last = s.lastIndexOf('}');
-          if (first !== -1 && last !== -1 && last > first) {
-            const slice = s.slice(first, last+1);
-            try{
-              const j3 = JSON.parse(slice.replace(/,(\s*[}\]])/g,'$1'));
-              if(j3 && j3.marco_logico) return j3;
-              if(j3 && j3.marcoLogico) return {marco_logico:j3.marcoLogico};
-            }catch(_){}
-          }
-
-          const e = new Error('Falha ao interpretar JSON da IA');
-          e._detail = `b64_len=${clean.length} chunks=${pick.count} preview=${s.slice(0,180)}`;
-          throw e;
+        if(!currentText){
+          const err = new Error('Falha ao interpretar JSON da IA'); err._detail = `pass=${passes} no-text`;
+          throw err;
         }
-        const e = new Error('Falha ao interpretar JSON da IA');
-        e._detail = `b64_len=${clean.length} chunks=${pick.count}`;
-        throw e;
+
+        const cleaned = currentText.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
+        const parsed = tryParseJSON(cleaned);
+        if(parsed){ return parsed; }
+
+        const innerPieces = collectB64(cleaned);
+        diag.push(`pass=${passes} inner_b64=${innerPieces.length} preview="${cleaned.slice(0,120)}"`);
+        if(innerPieces.length>0){
+          joined = normalizeB64(innerPieces.join(''));
+          continue;
+        } else {
+          break;
+        }
       }
-      if(String(raw||'').trim().toLowerCase()==='accepted'){
-        const e = new Error('Body vazio do Webhook response'); e._detail='accepted-empty';
-        throw e;
-      }
-      throw new Error('no-b64-found');
+
+      const e = new Error('Falha ao interpretar JSON da IA');
+      e._detail = diag.join(' | ');
+      throw e;
     }
 
-    // ===== NORMALIZE OUT =====
     function normalizeOut(data,payload){
       const ml = data?.marco_logico || {};
       const og = (ml.objetivo_geral || payload?.descricaoProposta || payload?.nomeProjeto || 'não informado').trim();
@@ -241,7 +237,6 @@
       return {marco_logico:{objetivo_geral:og,objetivos_especificos:objs}};
     }
 
-    // ===== XLSX =====
     function xlsxOut(data,nome){
       const ml = data.marco_logico || {};
       const objs = Array.isArray(ml.objetivos_especificos) ? ml.objetivos_especificos : [];
@@ -316,7 +311,6 @@
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${ts}.xlsx`);
     }
 
-    // ===== EVENTS =====
     editalInput.addEventListener('change', async (e)=>{
       const file = e.target.files[0]; if(!file) return;
       clearError(); statusEl.textContent = 'Lendo arquivo...';
@@ -412,8 +406,8 @@
         try{
           parsed = parseFromProvider(txt);
         }catch(err){
-          const preview = (txt||'').slice(0,240);
-          showError('Falha ao interpretar JSON da IA', `Prévia retorno: ${preview}`);
+          const info = err && err._detail ? `\nDiagnóstico: ${err._detail}` : '';
+          showError('Falha ao interpretar JSON da IA', `Prévia retorno: ${(txt||'').slice(0,240)}${info}`);
           return;
         }
 
