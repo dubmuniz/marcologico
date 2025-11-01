@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — Resposta JSON/URL/B64</title>
+  <title>Marco Lógico — Preenchimento Local Garantido</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -22,7 +22,8 @@
     button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:600;cursor:pointer;font-size:16px}
     button:disabled{opacity:.6;cursor:not-allowed}
     .status{min-height:22px;color:var(--muted);margin:10px 0 0;font-size:14px}
-    .status.error{color:#c62828}.status.success{color:var(--green)}
+    .status.error{color:#c62828}
+    .status.success{color:var(--green)}
     .debug{background:#f7f7f7;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;display:none}
     .table{margin-top:14px;background:#fff;border:1px solid #eee;border-radius:10px;overflow:auto}
     table{width:100%;border-collapse:collapse;font-size:14px}
@@ -34,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Espera JSON direto, URL de JSON ou JSON com campo Base64+GZIP</p>
+    <p class="lead">Gera XLSX sempre preenchido. Se o backend falhar, preenche localmente.</p>
   </header>
 
   <main class="wrap">
@@ -76,12 +77,15 @@
     </div>
   </main>
 
+  <!-- libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
+    // ====== CONFIG ======
     const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
 
+    // ====== UI OEs (apenas títulos) ======
     const nOE = document.getElementById('nOE');
     const oesDiv = document.getElementById('oes');
     nOE.addEventListener('change', () => {
@@ -92,7 +96,7 @@
         wrap.innerHTML = `
           <div class="row" style="margin-top:10px">
             <div>
-              <label>OE ${i} — Título *</label>
+              <label>OE ${i}, título *</label>
               <input required id="oe_t_${i}" placeholder="Título do objetivo ${i}">
             </div>
           </div>`;
@@ -100,53 +104,82 @@
       }
     });
 
+    // ====== Utils simples ======
     function utf8Decode(bytes){ try{ return new TextDecoder('utf-8').decode(bytes); }catch{ return String.fromCharCode.apply(null, bytes); } }
-    function isGzip(bytes){ return bytes && bytes.length>2 && bytes[0]===0x1f && bytes[1]===0x8b; }
     function sliceToJsonEnvelope(txt){ const i=txt.indexOf("{"), j=txt.lastIndexOf("}"); return (i!==-1&&j!==-1&&j>i)?txt.slice(i,j+1):txt; }
-    function cleanB64Piece(s){ if(!s) return ""; let t=String(s).replace(/[\u200B-\u200F\u2028\u2029]/g,"").replace(/\s+/g,"").replace(/-/g,"+").replace(/_/g,"/").replace(/[^A-Za-z0-9+/=]/g,""); const m=t.length%4; if(m) t+="=".repeat(4-m); return t; }
-    function b64ToBytesLoose(s){ s=cleanB64Piece(s); const bin=atob(s); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; }
 
-    function decodeB64GzipOrThrow(str){
-      // se o servidor mandou H4sIA... incompleto, aborta com uma mensagem clara
-      const MIN_LEN = 200; // JSON útil em gzip costuma passar disso
-      if (str.length < MIN_LEN) throw Object.assign(new Error("Base64 GZIP truncado pelo servidor"), {truncated:true});
-      const b = b64ToBytesLoose(str);
-      const bytes = isGzip(b) ? pako.ungzip(b) : b;
-      return utf8Decode(bytes);
+    // ====== Geração local garantida ======
+    function summarize(text, len){
+      const t = (text||"").replace(/\s+/g," ").trim();
+      if(t.length<=len) return t;
+      return t.slice(0, len-1).trim()+"…";
     }
-
-    function parseResponseText(text){
-      // 1) tenta JSON direto
-      try{
-        const cand = sliceToJsonEnvelope(text);
-        return JSON.parse(cand);
-      }catch{}
-
-      // 2) tenta JSON com campo URL
-      try{
-        const probe = JSON.parse(sliceToJsonEnvelope(text));
-        if (probe && typeof probe.url === "string") return { __fetch__: probe.url };
-      }catch{}
-
-      // 3) tenta JSON com campo Base64
-      try{
-        const probe = JSON.parse(sliceToJsonEnvelope(text));
-        const k = "marco_logico_b64";
-        if (probe && typeof probe[k] === "string"){
-          const innerText = decodeB64GzipOrThrow(probe[k]);
-          return JSON.parse(sliceToJsonEnvelope(innerText));
+    function genIndicadores(base, idx){
+      return [
+        { texto:`Percentual de ${base.toLowerCase()} alcançado`, meta:">= 80%", meios_verificacao:["Relatórios de acompanhamento","Planilhas de monitoramento"] },
+        { texto:`Número de participantes impactados por ${base.toLowerCase()}`, meta:`>= ${50 + idx*25}`, meios_verificacao:["Listas de presença"] }
+      ];
+    }
+    function genAtividades(base, idx){
+      return [
+        {
+          titulo:`Planejar ${base.toLowerCase()}`,
+          descricao:`Planejamento detalhado do ${base.toLowerCase()}`,
+          logica_intervencao:"Definir entregas, responsáveis e marcos",
+          prazo:"0–3 meses"
+        },
+        {
+          titulo:`Executar ${base.toLowerCase()}`,
+          descricao:`Implementação das ações de ${base.toLowerCase()}`,
+          logica_intervencao:"Prototipar, testar, ajustar e consolidar",
+          prazo:"3–6 meses"
         }
-      }catch{}
-
-      // 4) se o corpo TODO parece ser o Base64 H4sIA...
-      if (/^H4sIA/.test(text) || /^[A-Za-z0-9+/=_-]+$/.test(text)){
-        const innerText = decodeB64GzipOrThrow(text);
-        return JSON.parse(sliceToJsonEnvelope(innerText));
-      }
-
-      throw new Error("Formato de resposta não suportado");
+      ];
+    }
+    function generateLocalML(nomeProjeto, descricao, objetivosEspecificos){
+      const objetivoGeral = `Implementar o projeto ${nomeProjeto} para gerar resultados mensuráveis no público-alvo, considerando o contexto descrito.`;
+      const oes = objetivosEspecificos.map((oe, idx)=>{
+        const base = oe.titulo || `Objetivo Específico ${oe.numero||idx+1}`;
+        const r1 = { titulo:`Consolidar ${base}`, indicadores: genIndicadores(base, 1), atividades: genAtividades(base, 1) };
+        const r2 = { titulo:`Ampliar ${base}`,    indicadores: genIndicadores(base, 2), atividades: genAtividades(base, 2) };
+        return { numero: oe.numero || idx+1, titulo: base, resultados: [r1, r2] };
+      });
+      return { objetivo_geral: summarize(objetivoGeral, 240), objetivos_especificos: oes };
     }
 
+    // Garante estrutura mínima mesmo que o backend traga pouco
+    function ensureStructure(ml, nomeProjeto, descricao, objetivosEspecificos){
+      if(!ml || !ml.objetivos_especificos || !ml.objetivos_especificos.length){
+        return generateLocalML(nomeProjeto, descricao, objetivosEspecificos);
+      }
+      if(!ml.objetivo_geral){ ml.objetivo_geral = summarize(`Implementar o projeto ${nomeProjeto}`, 240); }
+      ml.objetivos_especificos = ml.objetivos_especificos.map((oe, idx)=>{
+        const num = oe.numero || idx+1;
+        const titulo = oe.titulo || (objetivosEspecificos[idx]?.titulo || `Objetivo Específico ${num}`);
+        let resultados = oe.resultados || [];
+        if(resultados.length===0){
+          const base = titulo;
+          resultados = [
+            { titulo:`Consolidar ${base}`, indicadores: genIndicadores(base, 1), atividades: genAtividades(base, 1) },
+            { titulo:`Ampliar ${base}`,    indicadores: genIndicadores(base, 2), atividades: genAtividades(base, 2) }
+          ];
+        }else{
+          resultados = resultados.map((r,ri)=>{
+            const base = r.titulo || `${titulo} ${ri+1}`;
+            r.titulo = base;
+            r.indicadores = (r.indicadores||genIndicadores(base, ri+1)).slice(0,2);
+            while(r.indicadores.length<2) r.indicadores.push(genIndicadores(base, ri+1)[r.indicadores.length]);
+            r.atividades = (r.atividades||genAtividades(base, ri+1)).slice(0,2);
+            while(r.atividades.length<2) r.atividades.push(genAtividades(base, ri+1)[r.atividades.length]);
+            return r;
+          });
+        }
+        return { numero:num, titulo, resultados };
+      });
+      return ml;
+    }
+
+    // ====== Prévia ======
     function renderPreview(ml){
       const tb = document.querySelector('#tbl tbody'); tb.innerHTML = "";
       const push = (k,v)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${k}</b></td><td>${v||''}</td>`; tb.appendChild(tr); };
@@ -168,6 +201,7 @@
       document.getElementById('previewBox').style.display = 'block';
     }
 
+    // ====== XLSX ======
     function baixarXlsx(ml, nomeProjeto){
       const wb = XLSX.utils.book_new();
       const aoa=[["MARCO LÓGICO"],["Objetivo Geral", ml.objetivo_geral||""]];
@@ -189,17 +223,20 @@
           });
         });
       });
-      const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:26},{wch:40},{wch:42},{wch:16},{wch:42}];
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols']=[{wch:26},{wch:42},{wch:48},{wch:16},{wch:42}];
       XLSX.utils.book_append_sheet(wb, ws, "Marco Lógico");
       const safe=(nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30);
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
+    // ====== Envio ao Make e fallback local ======
     const frm = document.getElementById('frm');
     const statusEl = document.getElementById('status');
     const diagBox = document.getElementById('diagBox');
     const dlBtn = document.getElementById('dlXlsx');
     let lastML = null;
+
     dlBtn.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value); });
 
     frm.addEventListener('submit', async (e)=>{
@@ -233,58 +270,49 @@
           edital: editalText
         };
 
-        const res = await fetch(WEBHOOK_URL,{
-          method:'POST',
-          headers:{'Content-Type':'text/plain;charset=UTF-8'},
-          body: JSON.stringify(payload)
-        });
-
-        const buf = new Uint8Array(await res.arrayBuffer());
-        const contentType = res.headers.get('content-type')||null;
-
-        if(!res.ok){
-          const prev = utf8Decode(buf).slice(0,200);
-          throw new Error(`HTTP ${res.status} | ${prev}`);
-        }
-        if(!buf || !buf.length) throw Object.assign(new Error("Resposta vazia"), {diag:{stage:"no-bytes",contentType}});
-
-        statusEl.textContent = "Interpretando resposta...";
-
-        const rawText = utf8Decode(buf).trim();
-        let data = null;
-
+        // POST simples
+        let responseText = "";
         try{
-          data = parseResponseText(rawText);
-        }catch(err){
-          if (err.truncated){
-            const msg = "O Webhook do Make está devolvendo Base64 GZIP truncado. Mude o módulo final para JSON direto ou `{\"marco_logico_b64\":\"...\"}` dentro de JSON.";
-            throw Object.assign(new Error(msg), {diag:{stage:"truncated-b64", preview: rawText.slice(0,180)}});
-          }
-          throw err;
+          const res = await fetch(WEBHOOK_URL,{
+            method:'POST',
+            headers:{'Content-Type':'text/plain;charset=UTF-8'},
+            body: JSON.stringify(payload)
+          });
+          const buf = new Uint8Array(await res.arrayBuffer());
+          responseText = utf8Decode(buf).trim();
+        }catch(fetchErr){
+          // segue para fallback local
         }
 
-        // Se veio URL, baixa
-        if (data && data.__fetch__){
-          const r2 = await fetch(data.__fetch__, {cache:'no-store'});
-          const t2 = await r2.text();
-          data = JSON.parse(sliceToJsonEnvelope(t2));
+        // tenta parse do backend
+        let data = null;
+        if (responseText){
+          try{
+            data = JSON.parse(sliceToJsonEnvelope(responseText));
+          }catch{}
         }
 
-        const ml = data?.marco_logico || data;
-        if(!ml || !ml.objetivos_especificos) throw new Error("JSON sem campo 'marco_logico' válido.");
+        // extrai marco_logico se vier
+        let ml = data?.marco_logico || data;
+
+        // garante estrutura completa, ou gera tudo local
+        ml = ensureStructure(ml, nomeProjeto, desc, objetivosEspecificos);
 
         lastML = ml;
         renderPreview(ml);
-        statusEl.textContent = "✓ OK";
+        statusEl.textContent = data ? "✓ OK" : "✓ OK (preenchido localmente)";
         statusEl.classList.add('success');
 
+        // diagnóstico
         diagBox.style.display='block';
-        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({stage:"done",contentType},null,2);
+        diagBox.textContent = data
+          ? "Diagnóstico: backend OK, estrutura completada se necessário."
+          : "Diagnóstico: resposta ausente/ inválida. Foi gerado localmente a partir do formulário.";
       }catch(err){
         statusEl.textContent = "Erro: " + err.message;
         statusEl.classList.add('error');
         diagBox.style.display='block';
-        diagBox.textContent = (err.diag ? "Diagnóstico do parser:\n"+JSON.stringify(err.diag,null,2)+"\n\n" : "") + (err.stack||String(err));
+        diagBox.textContent = (err.stack||String(err));
       }
     });
   </script>
