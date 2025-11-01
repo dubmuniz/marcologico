@@ -75,11 +75,26 @@
     const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
 
     // util
+    const enc = new TextEncoder();
     function b64utf8(str){try{return btoa(unescape(encodeURIComponent(String(str))))}catch{return""}}
     function sanitizePlain(str){return String(str||"").replace(/[\u0000-\u001F\u007F]/g," ").replace(/\r/g," ").replace(/\t/g," ").replace(/\s+/g," ").trim()}
-    function isLikelyBase64(s){if(!s) return false; const t=String(s).trim().replace(/\s+/g,''); return /^[A-Za-z0-9+/=]+$/.test(t) && t.length>=12}
-    function b64ToBytes(b64){const t=String(b64||'').trim().replace(/\s+/g,''); const pad=t.length%4?t+'='.repeat(4-(t.length%4)):t; const bin=atob(pad); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out}
-    function gunzipToString(bytes){try{const u8=pako.ungzip(bytes); return new TextDecoder('utf-8').decode(u8)}catch{return''}}
+    function isLikelyBase64(s){if(!s) return false; const t=String(s).trim().replace(/\s+/g,''); return /^[A-Za-z0-9+/=]+$/.test(t)&&t.length>=24}
+    function b64ToBytes(b64){
+      if(!b64) throw new Error("Base64 vazio");
+      let t = String(b64).trim().replace(/[\r\n\s`"'<>]/g,'');
+      t = t.replace(/^data:\w+\/\w+;base64,/i,'');
+      const pad = t.length % 4; if (pad) t += '='.repeat(4-pad);
+      try{
+        const bin = atob(t);
+        const out = new Uint8Array(bin.length);
+        for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+        return out;
+      }catch{ throw new Error("Conteúdo não é Base64 válido (prefixo: "+t.slice(0,28)+")"); }
+    }
+    function gunzipToString(bytes){
+      try{ const u8=pako.ungzip(bytes); return new TextDecoder('utf-8').decode(u8); }
+      catch{ return ''; }
+    }
 
     async function readPDF(file){
       const buf=await file.arrayBuffer();
@@ -136,8 +151,13 @@
       }
     });
 
+    // Parser tolerante: JSON direto, Base64+GZIP, ou JSON “sujo”.
     function parseFromProvider(body){
-      const raw=String(body||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
+      const raw0=String(body||'').trim();
+      if (raw0.includes('"stop_reason":"max_tokens"')) {
+        throw new Error('Resposta truncada pelo provedor (max_tokens). Reduza a saída ou aumente max_tokens.');
+      }
+      const raw=raw0.replace(/^```(?:json)?\s*/i,'').replace(/```$/,'').trim();
 
       // JSON direto
       try{
@@ -168,13 +188,14 @@
       }
     }
 
+    // XLSX com wrap, alturas dinâmicas e merges.
     function gerarXLSX(data, nomeProjeto){
       const ml = data?.marco_logico||{};
       const objetivos = Array.isArray(ml.objetivos_especificos)?ml.objetivos_especificos:[];
       const wb = XLSX.utils.book_new();
       const aoa = []; const merges = [];
-      const T = v => String(v??'').trim();
-      const join = a => Array.isArray(a)?a.join('; '):String(a??'');
+      const T = v => String(v??'não informado').trim();
+      const join = a => Array.isArray(a)?a.join('; '):String(a??'não informado');
 
       aoa.push(['MARCO LÓGICO']); merges.push({s:{r:0,c:0},e:{r:0,c:7}});
       aoa.push(['Objetivo Geral', T(ml.objetivo_geral)]); merges.push({s:{r:1,c:1},e:{r:1,c:7}});
@@ -276,9 +297,14 @@
         const resp=await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         const body=await resp.text();
         if(!resp.ok) throw new Error(`HTTP ${resp.status} | ${body.slice(0,400)}`);
-        if (body.includes('"stop_reason":"max_tokens"')) throw new Error('Resposta truncada pelo provedor (max_tokens)');
+        if (body.includes('"stop_reason":"max_tokens"')) throw new Error('Resposta truncada pelo provedor (max_tokens).');
 
         const data = parseFromProvider(body);
+
+        // guarda métricas rápidas para debug
+        console.log('ML objetivo_geral:', (data?.marco_logico?.objetivo_geral||'').slice(0,120));
+        console.log('Qtd OEs:', Array.isArray(data?.marco_logico?.objetivos_especificos)?data.marco_logico.objetivos_especificos.length:0);
+
         gerarXLSX(data, nomeProjeto);
         statusEl.textContent='✓ Marco lógico gerado com sucesso';
         statusEl.classList.add('success');
@@ -294,6 +320,7 @@
   </script>
 </body>
 </html>
+
 
 
 
