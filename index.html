@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — Parser robusto com fallback CORS</title>
+  <title>Marco Lógico — Parser robusto</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Parser GZIP/Base64/JSON com fallback CORS</p>
+    <p class="lead">Parser GZIP/Base64/JSON</p>
   </header>
 
   <main class="wrap">
@@ -83,8 +83,6 @@
   <script>
     // ====== CONFIG ======
     const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
-    // Proxy CORS opcional. Deixe "" para desativar. Ex.: "https://cors.isomorphic-git.org/"
-    const CORS_PROXY = "https://cors.isomorphic-git.org/";
 
     // ====== UI OEs: só título ======
     const nOE = document.getElementById('nOE');
@@ -161,7 +159,7 @@
         }catch(e){ diag.steps.push("bytes-gzip-failed"); }
       }
 
-      // B) Tentar interpretar bytes como texto UTF-8 e JSON
+      // B) BYTES como texto UTF-8
       let textFull = "";
       if (bytes && bytes.length){
         try{ textFull = utf8Decode(bytes); }catch{ textFull = ""; }
@@ -179,7 +177,7 @@
         // B2) JSON com campo Base64 comum do Make
         try{
           const objProbe = JSON.parse(sliceToJsonEnvelope(textFull));
-          const b64Fields = ["body","data","file","content","payload","bytes","response"];
+          const b64Fields = ["body","data","file","content","payload","bytes","response","marco_logico_b64"];
           for (const k of b64Fields){
             const v = objProbe && objProbe[k];
             if (typeof v === "string" && v.length > 40){
@@ -231,7 +229,8 @@
         (oe.resultados||[]).forEach((r,i)=>{
           push(`Resultado ${oe.numero||idx+1}.${i+1}`, r.titulo||'');
           (r.indicadores||[]).forEach((ind,j)=>{
-            push(`Indicador ${oe.numero||idx+1}.${i+1}.${j+1]}`, `${ind.texto||''} | Meta: ${ind.meta||''} | MoV: ${(ind.meios_verificacao||[]).join('; ')}`);
+            // CORRIGIDO: sem colchete sobrando
+            push(`Indicador ${oe.numero||idx+1}.${i+1}.${j+1}`, `${ind.texto||''} | Meta: ${ind.meta||''} | MoV: ${(ind.meios_verificacao||[]).join('; ')}`);
           });
           (r.atividades||[]).forEach((a,j)=>{
             push(`Atividade ${oe.numero||idx+1}.${i+1}.${j+1}`, `${a.titulo||''} | Lógica: ${a.logica_intervencao||''} | Prazo: ${a.prazo||''}`);
@@ -270,7 +269,7 @@
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
-    // ====== Envio ao Make + fallback CORS ======
+    // ====== Envio ao Make + parsing ======
     const frm = document.getElementById('frm');
     const statusEl = document.getElementById('status');
     const diagBox = document.getElementById('diagBox');
@@ -278,25 +277,6 @@
     let lastML = null;
 
     dlBtn.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value); });
-
-    async function postAndParse(url, payload){
-      const res = await fetch(url,{
-        method:'POST',
-        headers:{'Content-Type':'application/json', 'Accept':'application/json'},
-        body: JSON.stringify(payload),
-        // NÃO usar no-cors. Mantém CORS padrão; se bloquear, faremos fallback via proxy.
-      });
-      const info = {
-        status: res.status,
-        ok: res.ok,
-        type: res.type,                 // basic | cors | opaque
-        contentType: res.headers.get('content-type')||null
-      };
-      // Tenta ler bytes; se opaque, a leitura ainda é permitida em arrayBuffer? Não. Vai dar 0 ou exception.
-      let buf = new Uint8Array(0);
-      try{ buf = new Uint8Array(await res.arrayBuffer()); }catch{}
-      return {res, buf, info};
-    }
 
     frm.addEventListener('submit', async (e)=>{
       e.preventDefault();
@@ -331,31 +311,26 @@
           edital: editalText
         };
 
-        // 1) Tentativa direta
-        let {res, buf, info} = await postAndParse(WEBHOOK_URL, payload);
+        const res = await fetch(WEBHOOK_URL,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
 
-        // 2) Se corpo vazio, tipo 'opaque' ou sem content-type, tenta proxy CORS se configurado
-        const needProxy = (!buf || !buf.length || info.type === 'opaque' || !info.contentType);
-        if (needProxy && CORS_PROXY){
-          statusEl.textContent = "Resposta bloqueada por CORS, tentando via proxy...";
-          const proxied = await postAndParse(CORS_PROXY + WEBHOOK_URL, payload);
-          res = proxied.res; buf = proxied.buf; info = proxied.info;
-        }
+        const contentType = res.headers.get('content-type')||'';
+        const buf = new Uint8Array(await res.arrayBuffer());
 
-        // Falha HTTP
         if(!res.ok){
           let preview = "";
           try{ preview = utf8Decode(buf).slice(0,200); }catch{}
-          throw new Error(`HTTP ${info.status} | ${preview}`);
+          throw new Error(`HTTP ${res.status} | ${preview}`);
         }
-
-        // Sem bytes para parse
         if(!buf || !buf.length){
-          throw Object.assign(new Error("Resposta vazia ou bloqueada por CORS"), {diag:{stage:"no-bytes",info}});
+          throw Object.assign(new Error("Resposta vazia"), {diag:{stage:"no-bytes",contentType}});
         }
 
         statusEl.textContent = "Interpretando resposta...";
-        const parsed = parseProviderResponseFull(buf, info.contentType);
+        const parsed = parseProviderResponseFull(buf, contentType);
         const data = parsed.data;
         const ml = data?.marco_logico || data;
         if(!ml || !ml.objetivos_especificos){ throw new Error("JSON sem campo 'marco_logico' válido."); }
@@ -366,7 +341,7 @@
         statusEl.classList.add('success');
 
         diagBox.style.display='block';
-        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({parsed:parsed.diag, responseInfo:info},null,2);
+        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify(parsed.diag,null,2);
       }catch(err){
         statusEl.textContent = "Erro: " + err.message;
         statusEl.classList.add('error');
@@ -377,6 +352,7 @@
   </script>
 </body>
 </html>
+
 
 
 
