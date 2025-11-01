@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — POST simples sem preflight CORS</title>
+  <title>Marco Lógico — Parser Base64/GZIP direto + fallback</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">POST simples text/plain para evitar preflight, parser GZIP/Base64/JSON</p>
+    <p class="lead">Aceita resposta como Base64+GZIP puro ou JSON</p>
   </header>
 
   <main class="wrap">
@@ -145,7 +145,30 @@
     function parseProviderResponseFull(bytes, contentTypeHeader){
       const diag = { stage:"start", gunzip:false, steps:[], contentType: contentTypeHeader||null, preview:"" };
 
-      // A) GZIP cru
+      // 0) TENTAR TEXTO COMPLETO COMO BASE64 (caso o Make devolva H4sIA... puro)
+      let asText = "";
+      if (bytes && bytes.length){
+        try{ asText = utf8Decode(bytes).trim(); }catch{ asText = ""; }
+      }
+      if (asText){
+        // se parecer Base64 (começa com H4sI ou possui apenas alfabeto base64)
+        const looksB64 = /^H4sIA|^[A-Za-z0-9+/=_-]+$/.test(asText);
+        if (looksB64){
+          try{
+            const cleaned = cleanB64Piece(asText);
+            const b = b64ToBytes(cleaned);
+            const innerText = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
+            const cand = sliceToJsonEnvelope(innerText).trim();
+            const obj = JSON.parse(cand);
+            diag.stage = isGzip(b) ? "fulltext-b64-gzip" : "fulltext-b64-plain";
+            diag.gunzip = isGzip(b);
+            diag.preview = cand.slice(0,160);
+            return { ok:true, data:obj, diag };
+          }catch(e){ diag.steps.push("fulltext-b64-failed"); }
+        }
+      }
+
+      // 1) BYTES = GZIP cru
       if (bytes && bytes.length && isGzip(bytes) && window.pako){
         try{
           const gunz = pako.ungzip(bytes);
@@ -159,16 +182,13 @@
         }catch(e){ diag.steps.push("bytes-gzip-failed"); }
       }
 
-      // B) Texto direto
-      let textFull = "";
-      if (bytes && bytes.length){
-        try{ textFull = utf8Decode(bytes); }catch{ textFull = ""; }
-      }
+      // 2) Texto direto
+      let textFull = asText;
       if (!textFull || !textFull.trim()){
         throw Object.assign(new Error("Resposta vazia"), {diag});
       }
 
-      // B1) JSON direto
+      // 2.1) JSON direto
       try{
         const cand = sliceToJsonEnvelope(textFull.replace(/^\uFEFF/,"")).trim();
         const obj = JSON.parse(cand);
@@ -177,7 +197,7 @@
         return {ok:true, data:obj, diag};
       }catch(e){ diag.steps.push("bytes-text-json-failed"); }
 
-      // B2) JSON com campo Base64
+      // 2.2) JSON com campo Base64
       try{
         const objProbe = JSON.parse(sliceToJsonEnvelope(textFull));
         const b64Fields = ["marco_logico_b64","body","data","file","content","payload","bytes","response"];
@@ -200,7 +220,7 @@
         diag.steps.push("json-fields-b64-not-found");
       }catch(e){ diag.steps.push("outer-json-probe-failed"); }
 
-      // B3) Varredura Base64
+      // 2.3) Varredura Base64
       try{
         const pieces = collectAllB64(textFull);
         if (pieces.length){
@@ -272,7 +292,7 @@
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
-    // ====== Envio ao Make com POST simples text/plain ======
+    // ====== Envio ======
     const frm = document.getElementById('frm');
     const statusEl = document.getElementById('status');
     const diagBox = document.getElementById('diagBox');
@@ -312,7 +332,7 @@
           edital: editalText
         };
 
-        // POST simples: sem custom headers além de Content-Type text/plain
+        // POST minimalista para reduzir chance de preflight
         const res = await fetch(WEBHOOK_URL,{
           method:'POST',
           headers:{'Content-Type':'text/plain;charset=UTF-8'},
@@ -332,24 +352,24 @@
         }
 
         statusEl.textContent = "Interpretando resposta...";
-        // Caso o Make responda JSON direto
+
+        // JSON direto
         if (contentType.includes('application/json')){
           try{
             const text = utf8Decode(buf);
             const obj = JSON.parse(sliceToJsonEnvelope(text));
             const ml = obj?.marco_logico || obj;
-            if(!ml || !ml.objetivos_especificos){ throw new Error("JSON sem campo 'marco_logico' válido."); }
-            lastML = ml;
-            renderPreview(ml);
-            statusEl.textContent = "✓ OK";
-            statusEl.classList.add('success');
-            diagBox.style.display='block';
-            diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({stage:"json-direct", contentType},null,2);
-            return;
+            if(ml && ml.objetivos_especificos){
+              lastML = ml; renderPreview(ml);
+              statusEl.textContent = "✓ OK"; statusEl.classList.add('success');
+              diagBox.style.display='block';
+              diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({stage:"json-direct", contentType},null,2);
+              return;
+            }
           }catch(e){}
         }
 
-        // Fallback robusto
+        // Robustez (inclui caminho "H4sIA..." como texto puro)
         const parsed = parseProviderResponseFull(buf, contentType);
         const data = parsed.data;
         const ml = data?.marco_logico || data;
@@ -372,6 +392,7 @@
   </script>
 </body>
 </html>
+
 
 
 
