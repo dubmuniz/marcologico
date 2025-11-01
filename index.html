@@ -34,6 +34,8 @@
     .status.success{color:#1E7E34}
     .debug-info{background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;font-size:12px;font-family:monospace;max-height:420px;overflow-y:auto;display:none;white-space:pre-wrap;word-break:break-all}
     .debug-info.show{display:block}
+    .debug-actions{display:flex;gap:8px;margin-top:8px}
+    .debug-actions button{width:auto;background:#eee;color:#111}
   </style>
 </head>
 <body>
@@ -79,6 +81,10 @@
       <button type="submit" id="submitBtn">Gerar marco lógico</button>
       <p id="status" class="status"></p>
       <div id="debugInfo" class="debug-info"></div>
+      <div class="debug-actions" id="debugActions" style="display:none">
+        <button type="button" id="copyRaw">Copiar resposta crua</button>
+        <button type="button" id="copyHint">Copiar dica do Make</button>
+      </div>
     </form>
   </main>
 
@@ -97,32 +103,30 @@
     const statusEl = document.getElementById('status');
     const submitBtn = document.getElementById('submitBtn');
     const debugInfo = document.getElementById('debugInfo');
+    const debugActions = document.getElementById('debugActions');
+    const copyRawBtn = document.getElementById('copyRaw');
+    const copyHintBtn = document.getElementById('copyHint');
 
     // Estado
     let editalConteudo = '';
     let lastPayload = null;
+    let lastRawResponse = '';
 
     // Utils
     const sanitizeString = (str) => (str==null?'':String(str).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim());
     const objetivosToOneLine = (arr) => Array.isArray(arr)?arr.map(o=>`${o.numero}. ${sanitizeString(o.titulo).replace(/"/g,'\\"')} | ${sanitizeString(o.descricao).replace(/"/g,'\\"')}`).join(' || '):'';
-    const CONTROL_GUIDE = "INSTRUCOES_GERACAO:\n- Nao copiar literalmente trechos do edital ou proposta; usar sinonimos.\n- Objetivo Especifico descreve mudanca de capacidade/comportamento.\n- Resultado descreve produto ou efeito imediato e deve ser diferente do objetivo.\n- Titulos sem as palavras Resultado ou Atividade e sem numeracao; usar verbo no infinitivo + objeto claro.\n- Indicadores SMART com numeros; pelo menos 2 entregaveis nomeados por resultado.\n- Logica de Intervencao com 2 a 3 frases iniciando com maiuscula.\n- Atividades: 2 por resultado, prazos livres em meses.\n";
+    const CONTROL_GUIDE = "INSTRUCOES_GERACAO:\n- Nao copiar literalmente; use sinonimos.\n- Objetivo Especifico = mudanca; Resultado = produto/efeito imediato.\n- Titulos sem as palavras Resultado/Atividade; verbo no infinitivo + objeto.\n- Indicadores SMART com numeros; ≥2 entregaveis nomeados por resultado.\n- Logica de Intervencao com 2–3 frases, maiuscula inicial.\n- Atividades: 2 por resultado, prazos livres em meses.\n";
 
     // Base64 helpers
     function b64utf8(s){return btoa(unescape(encodeURIComponent(String(s))));}
     function normalizeB64Loose(s){
       if(!s) return '';
       let t = String(s).trim();
-      // remove cercas/markdown
       t = t.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
-      // remove aspas externas
       t = t.replace(/^[`'"]+|[`'"]+$/g,'').trim();
-      // remove espaços/quebras
       t = t.replace(/\s+/g,'');
-      // url-safe → padrão
       t = t.replace(/-/g,'+').replace(/_/g,'/');
-      // padding
       const pad = t.length % 4; if (pad) t += '='.repeat(4-pad);
-      // filtra caracteres inválidos mantendo base64 comum
       t = t.replace(/[^A-Za-z0-9+/=]/g,'');
       return t;
     }
@@ -137,118 +141,87 @@
       try{ return new TextDecoder('utf-8').decode(pako.ungzip(bytes)); }catch{return null;}
     }
 
-    // Tenta extrair uma string Base64 válida de vários formatos de resposta
+    // Extração agressiva de candidato Base64
     function extractCandidateB64(respText){
       let t = String(respText||'').trim();
 
-      // 1) Se já for JSON com marco_logico
+      // Saídas obviamente inválidas: muito curtas
+      if (t.length < 40) {
+        return {type:'too-short', value:t};
+      }
+
+      // JSON direto com marco_logico
       if (t.startsWith('{')) {
         try {
           const j = JSON.parse(t);
-          // caso já venha o objeto final
           if (j && j.marco_logico) return {type:'json-direct', value: JSON.stringify(j)};
-          // caminhos comuns
           const paths = [
             ['b64'], ['data'], ['content'], ['result'], ['output'], ['output_text'],
             ['choices',0,'message','content'], ['choices',0,'text']
           ];
           for (const p of paths){
-            let cur = j;
-            let ok = true;
-            for(const k of p){
-              if (cur && (k in cur)) { cur = cur[k]; } else { ok=false; break; }
-            }
-            if (ok && typeof cur === 'string' && cur.length>10) return {type:'json-b64', value: cur};
+            let cur = j, ok = true;
+            for(const k of p){ if (cur && (k in cur)) cur = cur[k]; else {ok=false;break;} }
+            if (ok && typeof cur === 'string' && cur.length>40) return {type:'json-b64', value: cur};
           }
-          // fallback: procurar string longa parecendo base64 em qualquer valor
           const flat = JSON.stringify(j);
           const m = flat.match(/["'`](?:[A-Za-z0-9+/_-]{80,})["'`]/);
           if (m) return {type:'regex-b64-json', value: m[0].slice(1,-1)};
-        } catch(e){
-          // segue para regex no texto bruto
-        }
+        } catch(e){/* segue */}
       }
 
-      // 2) Regex no texto bruto (pegando primeiro bloco longo de base64)
+      // Regex bruto
       const m2 = t.replace(/\s+/g,'').match(/([A-Za-z0-9+/_-]{80,}={0,2})/);
       if (m2) return {type:'regex-b64-raw', value: m2[1]};
 
-      // 3) Nada encontrado
-      return {type:'none', value:''};
+      return {type:'no-candidate', value:t};
     }
 
-    // Parser tolerante do provedor
+    // Parser tolerante
     function parseFromProvider(raw){
       const original = String(raw||'').trim();
-
-      // Caminho A: JSON direto com marco_logico
-      if (original.startsWith('{')) {
-        try{
-          const j = JSON.parse(original);
-          if (j && j.marco_logico) return j;
-        }catch{/* continua */}
-      }
-
-      // Extrair melhor candidato de base64 ou JSON encapsulado
       const cand = extractCandidateB64(original);
 
-      // Se veio json-direct, já retorne
-      if (cand.type === 'json-direct'){
-        try { return JSON.parse(cand.value); }
-        catch(e){
-          const err = new Error('Falha ao interpretar JSON da IA');
-          err._path = cand.type;
-          err._snippet = cand.value.slice(0,200);
-          throw err;
-        }
+      // tratativas especiais
+      if (cand.type === 'too-short' || cand.type === 'no-candidate') {
+        const err = new Error('Falha ao interpretar JSON da IA');
+        err._path = cand.type;
+        err._snippet = cand.value.slice(0,200);
+        throw err;
+      }
+      if (cand.type === 'json-direct') {
+        return JSON.parse(cand.value);
       }
 
-      // Se temos uma base64 candidata
-      if (cand.value){
-        try{
-          const bytes = b64ToBytesLoose(cand.value);
-          // tenta gunzip
-          const asGz = tryGunzipToText(bytes);
-          if (asGz){
-            // procurar início do objeto se houver prefixo
-            let clean = asGz.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
-            const start = clean.indexOf('{"marco_logico"');
-            if (start>0) clean = clean.slice(start);
-            try { return JSON.parse(clean); } catch{}
-            try { return JSON.parse(clean.replace(/,(\s*[}\]])/g,'$1')); } catch{}
-            const err = new Error('Falha ao interpretar JSON da IA');
-            err._path = cand.type + ' (gunzip)';
-            err._snippet = clean.slice(0,200);
-            throw err;
-          } else {
-            // não era gzip: tentar como JSON plano base64
-            const asText = new TextDecoder('utf-8').decode(bytes);
-            let clean = asText.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
-            const start = clean.indexOf('{"marco_logico"');
-            if (start>0) clean = clean.slice(start);
-            try { return JSON.parse(clean); } catch{}
-            try { return JSON.parse(clean.replace(/,(\s*[}\]])/g,'$1')); } catch{}
-            const err = new Error('Falha ao interpretar JSON da IA');
-            err._path = cand.type + ' (plain-b64)';
-            err._snippet = clean.slice(0,200);
-            throw err;
-          }
-        }catch(e){
-          const err = new Error('Falha ao interpretar JSON da IA');
-          err._path = cand.type + ' (decode)';
-          err._snippet = (e && e.message) ? e.message : '';
-          throw err;
-        }
+      // Base64 → bytes
+      const bytes = b64ToBytesLoose(cand.value);
+
+      // tenta gunzip → json
+      const asGz = tryGunzipToText(bytes);
+      if (asGz){
+        let clean = asGz.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
+        const start = clean.indexOf('{"marco_logico"'); if (start>0) clean = clean.slice(start);
+        try { return JSON.parse(clean); } catch{}
+        try { return JSON.parse(clean.replace(/,(\s*[}\]])/g,'$1')); } catch{}
+        const err = new Error('Falha ao interpretar JSON da IA');
+        err._path = cand.type + ' (gunzip)';
+        err._snippet = clean.slice(0,200);
+        throw err;
       }
 
-      // Sem candidato viável
+      // sem gzip: tentar como base64 de json plano
+      const asText = new TextDecoder('utf-8').decode(bytes);
+      let clean = asText.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
+      const start = clean.indexOf('{"marco_logico"'); if (start>0) clean = clean.slice(start);
+      try { return JSON.parse(clean); } catch{}
+      try { return JSON.parse(clean.replace(/,(\s*[}\]])/g,'$1')); } catch{}
       const err = new Error('Falha ao interpretar JSON da IA');
-      err._path = 'no-candidate';
-      err._snippet = original.slice(0,200);
+      err._path = cand.type + ' (plain-b64)';
+      err._snippet = clean.slice(0,200);
       throw err;
     }
 
-    // Normalizador mínimo (mantido)
+    // Normalizador mínimo
     function normalizeMarco(data, payload){
       const ml = data?.marco_logico || {};
       const objetivoGeral = sanitizeString(ml.objetivo_geral || payload?.descricaoProposta || payload?.nomeProjeto || 'nao informado');
@@ -286,7 +259,7 @@
       return { marco_logico: { objetivo_geral: objetivoGeral, objetivos_especificos: objetivos} };
     }
 
-    // Estilo e enriquecimento (mantidos)
+    // Estilo & enriquecimento
     function cleanTitle(t){
       if(!t) return '';
       let s = String(t).trim();
@@ -444,7 +417,7 @@
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = [{ wch: 36 }, { wch: 42 }, { wch: 22 }, { wch: 38 }, { wch: 4 }, { wch: 4 }, { wch: 4 }, { wch: 4 }];
       ws['!merges'] = merges;
-      const range = XLSX.utils.decode_range(ws['!ref']);
+      const range = XLSX.utils.decode_range(ws['!ref']||'A1:A1');
       for(let R=range.s.r; R<=range.e.r; R++){
         for(let C=range.s.c; C<=range.e.c; C++){
           const addr = XLSX.utils.encode_cell({r:R,c:C});
@@ -483,7 +456,7 @@
     // Eventos
     editalInput.addEventListener('change', async (e)=>{
       const file=e.target.files[0]; if(!file) return;
-      statusEl.textContent='Lendo arquivo...'; statusEl.classList.remove('error','success'); debugInfo.classList.remove('show');
+      statusEl.textContent='Lendo arquivo...'; statusEl.classList.remove('error','success'); debugInfo.classList.remove('show'); debugActions.style.display='none';
       try{
         const name=file.name.toLowerCase();
         if(name.endsWith('.txt')||file.type==='text/plain'){editalConteudo=await file.text();}
@@ -513,9 +486,21 @@
       } else objetivosSection.classList.remove('ativa');
     });
 
+    copyRawBtn.addEventListener('click', ()=>{
+      if(!lastRawResponse) return;
+      navigator.clipboard.writeText(lastRawResponse);
+      alert('Resposta crua copiada.');
+    });
+    copyHintBtn.addEventListener('click', ()=>{
+      const hint = 'No módulo "Webhook response" do Make, defina Body como a string Base64 completa do Claude. Exemplos:\n- {{Claude[1].content}}\n- {{join(map(Claude[1].content; text); "")}}\nNão use length(), size() ou contagem de bundles.';
+      navigator.clipboard.writeText(hint);
+      alert('Dica copiada.');
+    });
+
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      debugInfo.classList.remove('show'); debugInfo.innerHTML=''; statusEl.classList.remove('error','success');
+      debugInfo.classList.remove('show'); debugInfo.innerHTML=''; debugActions.style.display='none';
+      statusEl.classList.remove('error','success');
       if(!editalConteudo){ statusEl.textContent='Por favor, carregue o arquivo do edital'; statusEl.classList.add('error'); return; }
 
       const nomeProjeto=sanitizeString(document.getElementById('nomeProjeto').value);
@@ -531,10 +516,10 @@
         objetivosEspecificos.push({numero:i,titulo:t.substring(0,200),descricao:d.substring(0,500)});
       }
 
-      const editalForModel   = (CONTROL_GUIDE + "\nEDITAL:\n"   + editalConteudo).slice(0, MAX_EDITAL);
-      const projetoForModel  = (CONTROL_GUIDE + "\nPROJETO:\n"  + nomeProjeto).slice(0, MAX_PROJ);
-      const propostaForModel = (CONTROL_GUIDE + "\nPROPOSTA:\n" + descricaoProposta).slice(0, MAX_PROP);
-      const objsTxtForModel  = (CONTROL_GUIDE + "\nOBJ_TXT:\n"  + objetivosToOneLine(objetivosEspecificos)).slice(0, MAX_OBJS);
+      const editalForModel   = ("INSTRUCOES_GERACAO\n"+editalConteudo).slice(0, MAX_EDITAL);
+      const projetoForModel  = ("INSTRUCOES_GERACAO\n"+nomeProjeto).slice(0, MAX_PROJ);
+      const propostaForModel = ("INSTRUCOES_GERACAO\n"+descricaoProposta).slice(0, MAX_PROP);
+      const objsTxtForModel  = ("INSTRUCOES_GERACAO\n"+objetivosToOneLine(objetivosEspecificos)).slice(0, MAX_OBJS);
 
       const payload={
         edital_b64: b64utf8(editalForModel),
@@ -554,6 +539,8 @@
 
         const resp=await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json, text/plain'},body:JSON.stringify(payload)});
         const respText = await resp.text();
+        lastRawResponse = respText;
+
         if(!resp.ok){ throw new Error(`Erro HTTP: ${resp.status} ${resp.statusText} | ${respText.slice(0,600)}`); }
 
         statusEl.textContent='Interpretando resposta da IA...';
@@ -562,10 +549,14 @@
           parsed = parseFromProvider(respText);
         }catch(e){
           statusEl.classList.add('error');
-          debugInfo.textContent = 'Diagnóstico do parser: ' +
-            (e._path ? `[${e._path}] ` : '') +
-            (e.message||'') + '\nPrévia: ' + (e._snippet||'');
+          const short = (respText||'').slice(0,200);
+          const likelyMake = (short.length<40 || /^[0-9]+$/.test(short.trim()));
+          debugInfo.textContent =
+            'Diagnóstico do parser: ' + (e._path ? `[${e._path}] ` : '') + (e.message||'') +
+            '\nPrévia retorno: ' + short +
+            (likelyMake ? '\n>> O retorno é muito curto (ex.: "2"). Verifique o módulo "Webhook response" no Make. O Body deve devolver a STRING Base64 do Claude, não o número de bundles nem length().' : '');
           debugInfo.classList.add('show');
+          debugActions.style.display='flex';
           throw e;
         }
 
@@ -585,6 +576,7 @@
         if(!debugInfo.classList.contains('show')){
           debugInfo.textContent = (err && err.stack) ? err.stack : String(err);
           debugInfo.classList.add('show');
+          debugActions.style.display='flex';
         }
       }finally{
         submitBtn.disabled=false;
