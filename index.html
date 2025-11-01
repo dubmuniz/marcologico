@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — Parser Base64/GZIP direto + fallback</title>
+  <title>Marco Lógico — Parser tolerante (H4sIA/JSON)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Aceita resposta como Base64+GZIP puro ou JSON</p>
+    <p class="lead">Aceita JSON direto ou Base64+GZIP (H4sIA…)</p>
   </header>
 
   <main class="wrap">
@@ -141,101 +141,110 @@
       return out;
     }
 
+    // Tenta decodificar um string Base64 (possivelmente percent-encoded, sem padding, ou levemente truncado)
+    function tryDecodeB64GzipLoose(b64Like, maxTrim=12){
+      let s = b64Like.trim();
+
+      // 1) desfaz percent-encoding se houver
+      try{
+        if (/%[0-9A-Fa-f]{2}/.test(s)) s = decodeURIComponent(s);
+      }catch{}
+
+      // 2) limpeza/padding
+      s = cleanB64Piece(s);
+
+      // 3) tentativa direta
+      try{
+        const b = b64ToBytes(s);
+        const inner = isGzip(b) ? pako.ungzip(b) : b;
+        return utf8Decode(inner);
+      }catch{}
+
+      // 4) tolerância a finais corrompidos: recorta do fim e tenta de novo
+      for (let cut=1; cut<=maxTrim && s.length>32; cut++){
+        let cand = s.slice(0, s.length - cut);
+        const m = cand.length % 4; if (m) cand += "=".repeat(4-m);
+        try{
+          const b = b64ToBytes(cand);
+          const inner = isGzip(b) ? pako.ungzip(b) : b;
+          return utf8Decode(inner);
+        }catch{}
+      }
+      throw new Error("decode-b64-loose-failed");
+    }
+
     // ====== Parser ======
     function parseProviderResponseFull(bytes, contentTypeHeader){
       const diag = { stage:"start", gunzip:false, steps:[], contentType: contentTypeHeader||null, preview:"" };
 
-      // 0) TENTAR TEXTO COMPLETO COMO BASE64 (caso o Make devolva H4sIA... puro)
-      let asText = "";
+      // TEXTO COMPLETO
+      let textFull = "";
       if (bytes && bytes.length){
-        try{ asText = utf8Decode(bytes).trim(); }catch{ asText = ""; }
+        try{ textFull = utf8Decode(bytes).trim(); }catch{ textFull=""; }
       }
-      if (asText){
-        // se parecer Base64 (começa com H4sI ou possui apenas alfabeto base64)
-        const looksB64 = /^H4sIA|^[A-Za-z0-9+/=_-]+$/.test(asText);
-        if (looksB64){
-          try{
-            const cleaned = cleanB64Piece(asText);
-            const b = b64ToBytes(cleaned);
-            const innerText = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
-            const cand = sliceToJsonEnvelope(innerText).trim();
-            const obj = JSON.parse(cand);
-            diag.stage = isGzip(b) ? "fulltext-b64-gzip" : "fulltext-b64-plain";
-            diag.gunzip = isGzip(b);
-            diag.preview = cand.slice(0,160);
-            return { ok:true, data:obj, diag };
-          }catch(e){ diag.steps.push("fulltext-b64-failed"); }
-        }
-      }
-
-      // 1) BYTES = GZIP cru
-      if (bytes && bytes.length && isGzip(bytes) && window.pako){
-        try{
-          const gunz = pako.ungzip(bytes);
-          const txt = utf8Decode(gunz).replace(/^\uFEFF/,"");
-          const cand = sliceToJsonEnvelope(txt).trim();
-          const obj = JSON.parse(cand);
-          diag.stage="bytes-gzip";
-          diag.gunzip=true;
-          diag.preview=cand.slice(0,160);
-          return {ok:true, data:obj, diag};
-        }catch(e){ diag.steps.push("bytes-gzip-failed"); }
-      }
-
-      // 2) Texto direto
-      let textFull = asText;
-      if (!textFull || !textFull.trim()){
+      if (!textFull){
         throw Object.assign(new Error("Resposta vazia"), {diag});
       }
 
-      // 2.1) JSON direto
+      // A) JSON direto
       try{
         const cand = sliceToJsonEnvelope(textFull.replace(/^\uFEFF/,"")).trim();
         const obj = JSON.parse(cand);
-        diag.stage="bytes-text-json";
+        diag.stage="json-direct";
         diag.preview=cand.slice(0,160);
         return {ok:true, data:obj, diag};
-      }catch(e){ diag.steps.push("bytes-text-json-failed"); }
+      }catch(e){ diag.steps.push("json-direct-failed"); }
 
-      // 2.2) JSON com campo Base64
+      // B) String inteira parece Base64/H4sIA
+      const looksB64 = /^H4sIA|^[A-Za-z0-9+/=_-]+$/.test(textFull);
+      if (looksB64){
+        try{
+          const innerText = tryDecodeB64GzipLoose(textFull, 24);
+          const cand = sliceToJsonEnvelope(innerText).trim();
+          const obj = JSON.parse(cand);
+          diag.stage = "fulltext-b64-loose";
+          diag.gunzip = true;
+          diag.preview = cand.slice(0,160);
+          return { ok:true, data:obj, diag };
+        }catch(e){ diag.steps.push("fulltext-b64-loose-failed"); }
+      }
+
+      // C) JSON com campo b64
       try{
-        const objProbe = JSON.parse(sliceToJsonEnvelope(textFull));
-        const b64Fields = ["marco_logico_b64","body","data","file","content","payload","bytes","response"];
-        for (const k of b64Fields){
-          const v = objProbe && objProbe[k];
+        const probe = JSON.parse(sliceToJsonEnvelope(textFull));
+        const keys = ["marco_logico_b64","body","data","file","content","payload","bytes","response"];
+        for (const k of keys){
+          const v = probe && probe[k];
           if (typeof v === "string" && v.length >= 16){
-            const cleaned = cleanB64Piece(v);
             try{
-              const b = b64ToBytes(cleaned);
-              let inner = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
-              inner = sliceToJsonEnvelope(inner).trim();
-              const objInner = JSON.parse(inner);
-              diag.stage = `json-field-${k}-b64`;
-              diag.gunzip = isGzip(b);
-              diag.preview = inner.slice(0,160);
-              return {ok:true, data:objInner, diag};
+              const innerText = tryDecodeB64GzipLoose(v, 24);
+              const cand = sliceToJsonEnvelope(innerText).trim();
+              const obj = JSON.parse(cand);
+              diag.stage = `json-field-${k}-b64-loose`;
+              diag.gunzip = true;
+              diag.preview = cand.slice(0,160);
+              return { ok:true, data:obj, diag };
             }catch(e){}
           }
         }
-        diag.steps.push("json-fields-b64-not-found");
+        diag.steps.push("json-field-b64-loose-failed");
       }catch(e){ diag.steps.push("outer-json-probe-failed"); }
 
-      // 2.3) Varredura Base64
+      // D) Varredura de múltiplos blocos b64
       try{
         const pieces = collectAllB64(textFull);
         if (pieces.length){
           const joined = pieces.map(cleanB64Piece).join("");
-          const b = b64ToBytes(joined);
-          let inner = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
-          inner = sliceToJsonEnvelope(inner).trim();
-          const objInner = JSON.parse(inner);
-          diag.stage = isGzip(b) ? "scan-b64-gzip" : "scan-b64-plain";
-          diag.gunzip = isGzip(b);
-          diag.preview = inner.slice(0,160);
-          return {ok:true, data:objInner, diag};
+          const innerText = tryDecodeB64GzipLoose(joined, 24);
+          const cand = sliceToJsonEnvelope(innerText).trim();
+          const obj = JSON.parse(cand);
+          diag.stage = "scan-b64-joined-loose";
+          diag.gunzip = true;
+          diag.preview = cand.slice(0,160);
+          return { ok:true, data:obj, diag };
         }
         diag.steps.push("scan-b64-none");
-      }catch(e){ diag.steps.push("scan-b64-failed"); }
+      }catch(e){ diag.steps.push("scan-b64-joined-loose-failed"); }
 
       diag.stage = "text-fallback";
       diag.preview = textFull.slice(0,200);
@@ -332,7 +341,7 @@
           edital: editalText
         };
 
-        // POST minimalista para reduzir chance de preflight
+        // POST minimalista para reduzir preflight
         const res = await fetch(WEBHOOK_URL,{
           method:'POST',
           headers:{'Content-Type':'text/plain;charset=UTF-8'},
@@ -353,7 +362,7 @@
 
         statusEl.textContent = "Interpretando resposta...";
 
-        // JSON direto
+        // JSON direto (se o cenário devolver JSON)
         if (contentType.includes('application/json')){
           try{
             const text = utf8Decode(buf);
@@ -369,7 +378,7 @@
           }catch(e){}
         }
 
-        // Robustez (inclui caminho "H4sIA..." como texto puro)
+        // H4sIA/variações e demais casos
         const parsed = parseProviderResponseFull(buf, contentType);
         const data = parsed.data;
         const ml = data?.marco_logico || data;
@@ -392,6 +401,7 @@
   </script>
 </body>
 </html>
+
 
 
 
