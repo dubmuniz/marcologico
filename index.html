@@ -35,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Parser GZIP/Base64/JSON</p>
+    <p class="lead">Parser GZIP, Base64 e JSON com fallback</p>
   </header>
 
   <main class="wrap">
@@ -83,8 +83,10 @@
   <script>
     // ====== CONFIG ======
     const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
+    // Usa proxy CORS sempre para garantir bytes legíveis no GitHub Pages
+    const CORS_PROXY = "https://cors.isomorphic-git.org/";
 
-    // ====== UI OEs: só título ======
+    // ====== UI OEs ======
     const nOE = document.getElementById('nOE');
     const oesDiv = document.getElementById('oes');
     nOE.addEventListener('change', () => {
@@ -115,9 +117,10 @@
       if(i!==-1 && j!==-1 && j>i) return txt.slice(i, j+1);
       return txt;
     }
+    // aceita blocos menores também
     function collectAllB64(raw){
       const txt = String(raw||"");
-      const rx = /[A-Za-z0-9+/_=-]{40,}/g;
+      const rx = /[A-Za-z0-9+/_=-]{16,}/g;
       const out = []; let m;
       while((m = rx.exec(txt)) !== null){ out.push(m[0]); }
       return out;
@@ -141,11 +144,11 @@
       return out;
     }
 
-    // ====== Parser unificado ======
+    // ====== Parser ======
     function parseProviderResponseFull(bytes, contentTypeHeader){
       const diag = { stage:"start", gunzip:false, steps:[], contentType: contentTypeHeader||null, preview:"" };
 
-      // A) BYTES = GZIP cru
+      // A) GZIP cru
       if (bytes && bytes.length && isGzip(bytes) && window.pako){
         try{
           const gunz = pako.ungzip(bytes);
@@ -159,62 +162,69 @@
         }catch(e){ diag.steps.push("bytes-gzip-failed"); }
       }
 
-      // B) BYTES como texto UTF-8
+      // B) Texto direto a partir dos bytes
       let textFull = "";
       if (bytes && bytes.length){
         try{ textFull = utf8Decode(bytes); }catch{ textFull = ""; }
       }
-      if (textFull){
-        // B1) JSON direto
-        try{
-          const cand = sliceToJsonEnvelope(textFull.replace(/^\uFEFF/,"")).trim();
-          const obj = JSON.parse(cand);
-          diag.stage="bytes-text-json";
-          diag.preview=cand.slice(0,160);
-          return {ok:true, data:obj, diag};
-        }catch(e){ diag.steps.push("bytes-text-json-failed"); }
 
-        // B2) JSON com campo Base64 comum do Make
-        try{
-          const objProbe = JSON.parse(sliceToJsonEnvelope(textFull));
-          const b64Fields = ["body","data","file","content","payload","bytes","response","marco_logico_b64"];
-          for (const k of b64Fields){
-            const v = objProbe && objProbe[k];
-            if (typeof v === "string" && v.length > 40){
-              const cleaned = cleanB64Piece(v);
-              try{
-                const b = b64ToBytes(cleaned);
-                let inner = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
-                inner = sliceToJsonEnvelope(inner).trim();
-                const objInner = JSON.parse(inner);
-                diag.stage = `json-field-${k}-b64`;
-                diag.gunzip = isGzip(b);
-                diag.preview = inner.slice(0,160);
-                return {ok:true, data:objInner, diag};
-              }catch(e){}
-            }
-          }
-          diag.steps.push("json-fields-b64-not-found");
-        }catch(e){ diag.steps.push("outer-json-probe-failed"); }
-
-        // B3) Varredura de Base64
-        try{
-          const pieces = collectAllB64(textFull);
-          if (pieces.length){
-            const joined = pieces.map(cleanB64Piece).join("");
-            const b = b64ToBytes(joined);
-            let inner = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
-            inner = sliceToJsonEnvelope(inner).trim();
-            const objInner = JSON.parse(inner);
-            diag.stage = isGzip(b) ? "scan-b64-gzip" : "scan-b64-plain";
-            diag.gunzip = isGzip(b);
-            diag.preview = inner.slice(0,160);
-            return {ok:true, data:objInner, diag};
-          }
-          diag.steps.push("scan-b64-none");
-        }catch(e){ diag.steps.push("scan-b64-failed"); }
+      // B0) resposta vazia
+      if (!textFull || !textFull.trim()){
+        throw Object.assign(new Error("Resposta vazia"), {diag});
       }
 
+      // B1) JSON direto
+      try{
+        const cand = sliceToJsonEnvelope(textFull.replace(/^\uFEFF/,"")).trim();
+        const obj = JSON.parse(cand);
+        diag.stage="bytes-text-json";
+        diag.preview=cand.slice(0,160);
+        return {ok:true, data:obj, diag};
+      }catch(e){ diag.steps.push("bytes-text-json-failed"); }
+
+      // B2) Se for um JSON com campo b64
+      try{
+        const objProbe = JSON.parse(sliceToJsonEnvelope(textFull));
+        const b64Fields = ["marco_logico_b64","body","data","file","content","payload","bytes","response"];
+        for (const k of b64Fields){
+          const v = objProbe && objProbe[k];
+          if (typeof v === "string" && v.length >= 16){
+            const cleaned = cleanB64Piece(v);
+            try{
+              const b = b64ToBytes(cleaned);
+              let inner = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
+              inner = sliceToJsonEnvelope(inner).trim();
+              const objInner = JSON.parse(inner);
+              diag.stage = `json-field-${k}-b64`;
+              diag.gunzip = isGzip(b);
+              diag.preview = inner.slice(0,160);
+              return {ok:true, data:objInner, diag};
+            }catch(e){}
+          }
+        }
+        diag.steps.push("json-fields-b64-not-found");
+      }catch(e){ diag.steps.push("outer-json-probe-failed"); }
+
+      // B3) Varredura Base64 no texto bruto
+      try{
+        const pieces = collectAllB64(textFull);
+        if (pieces.length){
+          const joined = pieces.map(cleanB64Piece).join("");
+          const b = b64ToBytes(joined);
+          let inner = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
+          inner = sliceToJsonEnvelope(inner).trim();
+          const objInner = JSON.parse(inner);
+          diag.stage = isGzip(b) ? "scan-b64-gzip" : "scan-b64-plain";
+          diag.gunzip = isGzip(b);
+          diag.preview = inner.slice(0,160);
+          return {ok:true, data:objInner, diag};
+        }
+        diag.steps.push("scan-b64-none");
+      }catch(e){ diag.steps.push("scan-b64-failed"); }
+
+      // B4) Último recurso, retorna texto para debug
+      diag.stage = "text-fallback";
+      diag.preview = textFull.slice(0,200);
       throw Object.assign(new Error("Falha ao interpretar resposta do provedor"), {diag});
     }
 
@@ -229,7 +239,6 @@
         (oe.resultados||[]).forEach((r,i)=>{
           push(`Resultado ${oe.numero||idx+1}.${i+1}`, r.titulo||'');
           (r.indicadores||[]).forEach((ind,j)=>{
-            // CORRIGIDO: sem colchete sobrando
             push(`Indicador ${oe.numero||idx+1}.${i+1}.${j+1}`, `${ind.texto||''} | Meta: ${ind.meta||''} | MoV: ${(ind.meios_verificacao||[]).join('; ')}`);
           });
           (r.atividades||[]).forEach((a,j)=>{
@@ -269,7 +278,7 @@
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
-    // ====== Envio ao Make + parsing ======
+    // ====== Envio + parsing ======
     const frm = document.getElementById('frm');
     const statusEl = document.getElementById('status');
     const diagBox = document.getElementById('diagBox');
@@ -278,10 +287,32 @@
 
     dlBtn.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value); });
 
+    async function postViaProxy(url, payload){
+      // Proxy que aceita POST por prefixo de URL
+      const target = CORS_PROXY + url;
+      const res = await fetch(target,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'*/*'},
+        body: JSON.stringify(payload),
+        mode: 'cors',
+        redirect: 'follow',
+        cache: 'no-store',
+      });
+      const info = {
+        status: res.status,
+        ok: res.ok,
+        type: res.type,
+        contentType: res.headers.get('content-type')||null
+      };
+      let buf = new Uint8Array(0);
+      try{ buf = new Uint8Array(await res.arrayBuffer()); }catch{}
+      return {res, buf, info};
+    }
+
     frm.addEventListener('submit', async (e)=>{
       e.preventDefault();
       try{
-        statusEl.textContent = "Enviando ao Make...";
+        statusEl.textContent = "Enviando...";
         statusEl.classList.remove('error','success');
         diagBox.style.display='none';
         diagBox.textContent='';
@@ -298,9 +329,8 @@
           objetivosEspecificos.push({numero:i,titulo:t});
         }
 
-        // arquivo texto simples opcional
-        const file = document.getElementById('edital').files?.[0];
         let editalText = '';
+        const file = document.getElementById('edital').files?.[0];
         if (file && file.type === 'text/plain') {
           editalText = (await file.text()).slice(0,50000);
         }
@@ -311,26 +341,20 @@
           edital: editalText
         };
 
-        const res = await fetch(WEBHOOK_URL,{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(payload)
-        });
+        // sempre via proxy para contornar CORS do Make
+        const {res, buf, info} = await postViaProxy(WEBHOOK_URL, payload);
 
-        const contentType = res.headers.get('content-type')||'';
-        const buf = new Uint8Array(await res.arrayBuffer());
-
+        if (info.status === 204 || (buf && buf.length === 0)){
+          throw Object.assign(new Error("Resposta vazia do provedor"), {diag:{stage:"no-bytes",info}});
+        }
         if(!res.ok){
           let preview = "";
           try{ preview = utf8Decode(buf).slice(0,200); }catch{}
-          throw new Error(`HTTP ${res.status} | ${preview}`);
-        }
-        if(!buf || !buf.length){
-          throw Object.assign(new Error("Resposta vazia"), {diag:{stage:"no-bytes",contentType}});
+          throw new Error(`HTTP ${info.status} | ${preview}`);
         }
 
         statusEl.textContent = "Interpretando resposta...";
-        const parsed = parseProviderResponseFull(buf, contentType);
+        const parsed = parseProviderResponseFull(buf, info.contentType);
         const data = parsed.data;
         const ml = data?.marco_logico || data;
         if(!ml || !ml.objetivos_especificos){ throw new Error("JSON sem campo 'marco_logico' válido."); }
@@ -341,7 +365,7 @@
         statusEl.classList.add('success');
 
         diagBox.style.display='block';
-        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify(parsed.diag,null,2);
+        diagBox.textContent = "Diagnóstico do parser:\n" + JSON.stringify({parsed:parsed.diag, responseInfo:info},null,2);
       }catch(err){
         statusEl.textContent = "Erro: " + err.message;
         statusEl.classList.add('error');
@@ -352,8 +376,6 @@
   </script>
 </body>
 </html>
-
-
 
 
 
