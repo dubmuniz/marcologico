@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — IA local multilíngue</title>
+  <title>Marco Lógico — IA local variada e multilíngue</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Geração local com qualidade. Multilíngue. XLSX sempre preenchido.</p>
+    <p class="lead">Texto gerado a partir do formulário e do edital, com variação real e multilíngue.</p>
   </header>
 
   <main class="wrap">
@@ -43,7 +43,7 @@
       <div class="row3">
         <div>
           <label>Nome do Projeto *</label>
-          <input id="nomeProjeto" required placeholder="Ex.: Promoção da Política e Governança Climática">
+          <input id="nomeProjeto" required placeholder="Ex.: Governança Climática nos Territórios">
         </div>
         <div>
           <label>Qtd. Objetivos Específicos *</label>
@@ -62,7 +62,7 @@
       </div>
 
       <label>Descrição da Proposta *</label>
-      <textarea id="desc" required placeholder="Contexto, público, objetivos, resultados esperados"></textarea>
+      <textarea id="desc" required placeholder="Contexto, público, objetivos, território, metodologia, entregas"></textarea>
 
       <label>Arquivo do Edital (PDF/DOCX/TXT) — opcional</label>
       <input type="file" id="edital" accept=".pdf,.docx,.doc,.txt">
@@ -93,7 +93,7 @@
   <script>
     const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
 
-    // ====== UI OEs ======
+    // UI OEs
     const nOE = document.getElementById('nOE');
     const oesDiv = document.getElementById('oes');
     nOE.addEventListener('change', () => {
@@ -103,409 +103,303 @@
         const wrap = document.createElement('div');
         wrap.innerHTML = `
           <div class="row" style="margin-top:10px">
-            <div>
-              <label>OE ${i}, título *</label>
-              <input required id="oe_t_${i}" placeholder="Título do objetivo ${i}">
+            <div><label>OE ${i}, título *</label>
+              <input required id="oe_t_${i}" placeholder="Ex.: Fortalecer governança comunitária">
             </div>
           </div>`;
         oesDiv.appendChild(wrap);
       }
     });
 
-    // ====== Utils ======
+    // Utils
     function utf8Decode(bytes){ try{ return new TextDecoder('utf-8').decode(bytes); }catch{ return String.fromCharCode.apply(null, bytes); } }
     function sliceToJsonEnvelope(txt){ const i=txt.indexOf("{"), j=txt.lastIndexOf("}"); return (i!==-1&&j!==-1&&j>i)?txt.slice(i,j+1):txt; }
     function norm(s){ return (s||"").replace(/\s+/g," ").trim(); }
-    function ensureNoEllipsis(s){ return norm(String(s)).replace(/\s?\u2026|\s?\.\.\.\s?/g," "); }
-    function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+    function clean(s){ return norm(String(s)).replace(/\u2026|\.{3}/g,""); }
     function joinMV(arr){ return (arr||[]).filter(Boolean).join("; "); }
-    function kw(text,k=10){
-      const STOP=new Set("de,da,do,das,dos,para,por,com,sem,em,no,na,nos,nas,ao,aos,às,e,ou,um,uma,uns,umas,o,a,os,as,que,como,sobre,até,entre,mais,menos,ser,estar,ter".split(","));
-      const t=(text||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s-]/g," ").split(/\s+/).filter(w=>w && !STOP.has(w) && w.length>2);
-      const m=new Map(); t.forEach(w=>m.set(w,(m.get(w)||0)+1));
-      return Array.from(m.entries()).sort((a,b)=>b[1]-a[1]).slice(0,k).map(([w])=>w);
+
+    // Hash -> PRNG p/ variedade determinística por projeto
+    function cyrb128(str){ let h1=1779033703,h2=3144134277,h3=1013904242,h4=2773480762; for(let i=0;i<str.length;i++){ let k=str.charCodeAt(i); h1=h2^Math.imul(h1^k,597399067); h2=h3^Math.imul(h2^k,2869860233); h3=h4^Math.imul(h3^k,951274213); h4=h1^Math.imul(h4^k,2716044179);} h1=Math.imul(h3^ (h1>>>18),597399067); h2=Math.imul(h4^ (h2>>>22),2869860233); h3=Math.imul(h1^ (h3>>>17),951274213); h4=Math.imul(h2^ (h4>>>19),2716044179); return [(h1^h2^h3^h4)>>>0]; }
+    function mulberry32(a){ return function(){ let t=a+=0x6D2B79F5; t=Math.imul(t^(t>>>15), t|1); t^=t+Math.imul(t^(t>>>7), t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+    function pick(rng, arr){ return arr[Math.floor(rng()*arr.length)] }
+
+    // Keywords
+    function tokens(text){
+      return (text||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+        .replace(/[^a-z0-9\s-]/g," ").split(/\s+/).filter(Boolean);
+    }
+    function keyphrases(text, k=10){
+      const t=tokens(text); const f=new Map();
+      for(let i=0;i<t.length;i++){
+        const w=t[i]; if(w.length<4) continue;
+        f.set(w,(f.get(w)||0)+1);
+        if(i<t.length-1){ const bi=w+" "+t[i+1]; f.set(bi,(f.get(bi)||0)+1); }
+      }
+      return Array.from(f.entries()).sort((a,b)=>b[1]-a[1]).slice(0,k).map(([w])=>w);
     }
 
-    // ====== Traduções e templates ======
-    const L = {
-      pt: {
-        labels: {
-          geral: "Objetivo Geral", oe: i => `Objetivo Específico ${i}`,
-          resultados: "Resultados", indicadores: "Indicadores",
-          meta: "Meta", mov: "Meios de Verificação",
-          atividades: "Atividades", desc: "Descrição",
-          logica: "Lógica de Intervenção", prazo: "Prazo"
-        },
-        og: (nome, foco, publico) =>
-          `Implementar o projeto ${nome} com ações integradas para ${foco}, atendendo às necessidades do ${publico}, com resultados mensuráveis e conformidade ao edital.`,
-        resCon: t => `Consolidar ${t}`,
-        resAmp: t => `Ampliar ${t}`,
-        resMA:  t => `Aprimorar monitoramento e avaliação de ${t}`,
-        indPct: base => `Percentual de ${base} alcançado`,
-        indNum: base => `Número de participantes impactados por ${base}`,
-        indEdt: () => `Conformidade com requisitos e limites do edital`,
-        metas: (esc=1)=>({p1:`>= ${Math.round(75*esc)}%`, n1:`>= ${Math.round(120*esc)}`}),
-        movsBase: ()=>["Relatórios técnicos","Planilhas de monitoramento"],
-        movsNum: ()=>["Listas de presença","Registro de inscrição"],
-        movsEdt: ()=>["Checklist de conformidade","Versão final submetida"],
-        atvPlan: base => ({
-          titulo: `Planejar ${base}`,
-          descricao: `Elaborar plano detalhado para ${base}, com definição de entregas, responsáveis e marcos priorizados por impacto.`,
-          logica_intervencao: "Sequenciar atividades críticas, alinhar recursos, mitigar riscos e aprovar a governança.",
-          prazo: "0–3 meses",
-          meios_verificacao: ["Plano aprovado","Ata de validação"]
-        }),
-        atvExec: base => ({
-          titulo: `Executar ${base}`,
-          descricao: `Implementar as ações de ${base} em ciclos curtos, coletar feedbacks, medir resultados e ajustar rotas para escalar o que funciona.`,
-          logica_intervencao: "Aplicar, monitorar evidências e consolidar aprendizados para consolidação e expansão.",
-          prazo: "3–6 meses",
-          meios_verificacao: ["Relatório de execução","Evidências fotográficas"]
-        })
+    // Traduções
+    const LABEL = {
+      pt:{geral:"Objetivo Geral",oe:i=>`Objetivo Específico ${i}`,resultados:"Resultados",indic:"Indicadores",meta:"Meta",mov:"Meios de Verificação",ativ:"Atividades",desc:"Descrição",log:"Lógica de Intervenção",prazo:"Prazo"},
+      en:{geral:"Overall Objective",oe:i=>`Specific Objective ${i}`,resultados:"Results",indic:"Indicators",meta:"Target",mov:"Means of Verification",ativ:"Activities",desc:"Description",log:"Intervention Logic",prazo:"Timeline"},
+      es:{geral:"Objetivo General",oe:i=>`Objetivo Específico ${i}`,resultados:"Resultados",indic:"Indicadores",meta:"Meta",mov:"Medios de Verificación",ativ:"Actividades",desc:"Descripción",log:"Lógica de Intervención",prazo:"Plazo"}
+    };
+
+    // Frases variáveis por idioma
+    const TPL = {
+      pt:{
+        og:(nome,foco,alvo,abordagem)=>`Executar o projeto ${nome} para ${foco}, priorizando ${alvo}, com ${abordagem} e métricas de desempenho alinhadas ao edital.`,
+        abord:["abordagem participativa","governança colaborativa","ciclos iterativos de prototipagem","gestão orientada a evidências"],
+        alvo:["comunidades locais","beneficiários diretos","parcerias institucionais","redes territoriais"],
+        res:(verb,t)=>`${verb} ${t}`,
+        verbos:["Consolidar","Ampliar","Qualificar","Estruturar","Integrar","Descentralizar"],
+        atvPlan:(base)=>`Planejar ${base} com definição de entregas, responsáveis, cronograma e matriz de riscos.`,
+        atvExec:(base)=>`Implementar ${base} em ciclos curtos, monitorar indicadores, coletar feedback e ajustar o plano.`,
+        atvCap:(base)=>`Capacitar equipes e lideranças para sustentar ${base} com transferência de conhecimento.`,
+        movBase:["Relatórios técnicos","Planilhas de monitoramento","Registros fotográficos"],
+        movPart:["Listas de presença","Registros de inscrição","Questionários"],
       },
-      en: {
-        labels: {
-          geral: "Overall Objective", oe: i => `Specific Objective ${i}`,
-          resultados: "Results", indicadores: "Indicators",
-          meta: "Target", mov: "Means of Verification",
-          atividades: "Activities", desc: "Description",
-          logica: "Intervention Logic", prazo: "Timeline"
-        },
-        og: (nome, foco, publico) =>
-          `Implement the ${nome} project through integrated actions to ${foco}, addressing the needs of the ${publico}, ensuring measurable results and call compliance.`,
-        resCon: t => `Consolidate ${t}`, resAmp: t => `Scale ${t}`, resMA: t => `Strengthen M&E for ${t}`,
-        indPct: base => `Percentage of ${base} achieved`,
-        indNum: base => `Number of participants impacted by ${base}`,
-        indEdt: () => `Compliance with call requirements and limits`,
-        metas: (esc=1)=>({p1:`>= ${Math.round(75*esc)}%`, n1:`>= ${Math.round(120*esc)}`}),
-        movsBase: ()=>["Technical reports","Monitoring spreadsheets"],
-        movsNum: ()=>["Attendance lists","Registration records"],
-        movsEdt: ()=>["Compliance checklist","Final submitted version"],
-        atvPlan: base => ({
-          titulo: `Plan ${base}`,
-          descricao: `Develop a detailed plan for ${base}, defining deliverables, owners and milestones prioritized by impact.`,
-          logica_intervencao: "Sequence critical activities, align resources, mitigate risks and approve governance.",
-          prazo: "0–3 months",
-          meios_verificacao: ["Approved plan","Validation minutes"]
-        }),
-        atvExec: base => ({
-          titulo: `Execute ${base}`,
-          descricao: `Implement ${base} in short cycles, collect feedback, measure outcomes and adjust to scale effective practices.`,
-          logica_intervencao: "Apply, monitor evidence and consolidate learnings for consolidation and scaling.",
-          prazo: "3–6 months",
-          meios_verificacao: ["Implementation report","Photo evidence"]
-        })
+      en:{
+        og:(nome,foco,alvo,abordagem)=>`Deliver the ${nome} project to ${foco}, prioritizing ${alvo}, using ${abordagem} and performance metrics compliant with the call.`,
+        abord:["a participatory approach","collaborative governance","iterative prototyping cycles","evidence-driven management"],
+        alvo:["local communities","direct beneficiaries","institutional partnerships","territorial networks"],
+        res:(verb,t)=>`${verb} ${t}`,
+        verbos:["Consolidate","Scale","Improve","Structure","Integrate","Decentralize"],
+        atvPlan:(base)=>`Plan ${base} with deliverables, owners, schedule, and risk matrix.`,
+        atvExec:(base)=>`Execute ${base} in short cycles, track indicators, collect feedback, and adapt the plan.`,
+        atvCap:(base)=>`Train teams and leaders to sustain ${base} with knowledge transfer.`,
+        movBase:["Technical reports","Monitoring spreadsheets","Photo records"],
+        movPart:["Attendance lists","Registration records","Surveys"],
       },
-      es: {
-        labels: {
-          geral: "Objetivo General", oe: i => `Objetivo Específico ${i}`,
-          resultados: "Resultados", indicadores: "Indicadores",
-          meta: "Meta", mov: "Medios de Verificación",
-          atividades: "Actividades", desc: "Descripción",
-          logica: "Lógica de Intervención", prazo: "Plazo"
-        },
-        og: (nome, foco, publico) =>
-          `Implementar el proyecto ${nome} con acciones integradas para ${foco}, atendiendo a las necesidades del ${publico}, con resultados medibles y conformidad al llamado.`,
-        resCon: t => `Consolidar ${t}`, resAmp: t => `Ampliar ${t}`, resMA: t => `Fortalecer el M&E de ${t}`,
-        indPct: base => `Porcentaje de ${base} alcanzado`,
-        indNum: base => `Número de participantes impactados por ${base}`,
-        indEdt: () => `Conformidad con requisitos y límites del llamado`,
-        metas: (esc=1)=>({p1:`>= ${Math.round(75*esc)}%`, n1:`>= ${Math.round(120*esc)}`}),
-        movsBase: ()=>["Informes técnicos","Hojas de monitoreo"],
-        movsNum: ()=>["Listas de asistencia","Registros de inscripción"],
-        movsEdt: ()=>["Lista de verificación de conformidad","Versión final presentada"],
-        atvPlan: base => ({
-          titulo: `Planificar ${base}`,
-          descricao: `Elaborar un plan detallado para ${base}, con definición de entregas, responsables y hitos priorizados por impacto.`,
-          logica_intervencao: "Secuenciar actividades críticas, alinear recursos, mitigar riesgos y aprobar la gobernanza.",
-          prazo: "0–3 meses",
-          meios_verificacao: ["Plan aprobado","Acta de validación"]
-        }),
-        atvExec: base => ({
-          titulo: `Ejecutar ${base}`,
-          descricao: `Implementar ${base} en ciclos cortos, recoger retroalimentación, medir resultados y ajustar para escalar prácticas efectivas.`,
-          logica_intervencao: "Aplicar, monitorear evidencias y consolidar aprendizajes para consolidación y expansión.",
-          prazo: "3–6 meses",
-          meios_verificacao: ["Informe de ejecución","Evidencia fotográfica"]
-        })
+      es:{
+        og:(nome,foco,alvo,abordagem)=>`Ejecutar el proyecto ${nome} para ${foco}, priorizando ${alvo}, con ${abordagem} y métricas de desempeño acordes al llamado.`,
+        abord:["enfoque participativo","gobernanza colaborativa","ciclos iterativos de prototipado","gestión basada en evidencias"],
+        alvo:["comunidades locales","beneficiarios directos","alianzas institucionales","redes territoriales"],
+        res:(verb,t)=>`${verb} ${t}`,
+        verbos:["Consolidar","Ampliar","Mejorar","Estructurar","Integrar","Descentralizar"],
+        atvPlan:(base)=>`Planificar ${base} con entregables, responsables, cronograma y matriz de riesgos.`,
+        atvExec:(base)=>`Ejecutar ${base} en ciclos cortos, monitorear indicadores, recoger retroalimentación y ajustar el plan.`,
+        atvCap:(base)=>`Capacitar equipos y liderazgos para sostener ${base} con transferencia de conocimiento.`,
+        movBase:["Informes técnicos","Hojas de monitoreo","Registros fotográficos"],
+        movPart:["Listas de asistencia","Registros de inscripción","Encuestas"],
       }
     };
 
-    function focusPhrase(kws, lang){
-      const pick = kws.slice(0,3).map(w=>w);
-      if(lang==="en") return pick.join(", ");
-      if(lang==="es") return pick.join(", ");
-      return pick.join(", ");
-    }
-    function audience(descEdital, lang){
-      const has = /p(ú|u)blico|comunidade|benefici|estudantes|jovens|mulheres|famil/i.test(descEdital);
-      if(lang==="en") return has ? "priority target audience" : "target audience";
-      if(lang==="es") return has ? "público objetivo prioritario" : "público objetivo";
-      return has ? "público-alvo priorizado" : "público-alvo";
-    }
-
-    // ====== Leitura do edital (TXT/PDF/DOCX) ======
-    async function readFileText(file){
-      if(!file) return "";
-      if (file.type === "text/plain"){
-        return (await file.text()).slice(0,120000);
-      }
-      if (file.type === "application/pdf"){
-        const buf = new Uint8Array(await file.arrayBuffer());
-        const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-        const max = Math.min(pdf.numPages, 8);
-        let out = "";
-        for(let p=1;p<=max;p++){
-          const page = await pdf.getPage(p);
-          const txt = await page.getTextContent();
-          out += txt.items.map(it=>it.str).join(" ") + "\n";
-          if(out.length>120000) break;
-        }
-        return out.slice(0,120000);
-      }
-      if (file.name.endsWith(".docx")){
-        const arrayBuffer = await file.arrayBuffer();
-        const res = await window.mammoth.extractRawText({arrayBuffer});
-        return (res.value||"").slice(0,120000);
-      }
-      return "";
+    // Indicadores variados
+    function indicatorsFor(base, lang, rng, escala=1){
+      const L = LABEL[lang];
+      const t = TPL[lang];
+      const pct = Math.min(95, 70 + Math.floor(rng()*20) + Math.floor(10*escala));
+      const num = 80 + Math.floor(rng()*60) + Math.floor(20*escala);
+      const qlt = 60 + Math.floor(rng()*25);
+      const pool = [
+        {texto:(lang==="en"?`Percentage of ${base} achieved`:(lang==="es"?`Porcentaje de ${base} alcanzado`:`Percentual de ${base} alcançado`)), meta:`>= ${pct}%`, meios_verificacao:t.movBase},
+        {texto:(lang==="en"?`Number of participants impacted by ${base}`:(lang==="es"?`Número de participantes impactados por ${base}`:`Número de participantes impactados por ${base}`)), meta:`>= ${num}`, meios_verificacao:t.movPart},
+        {texto:(lang==="en"?`Satisfaction rate regarding ${base}`:(lang==="es"?`Índice de satisfacción sobre ${base}`:`Índice de satisfação sobre ${base}`)), meta:`>= ${qlt}%`, meios_verificacao:t.movPart}
+      ];
+      // retorna 2 diferentes
+      return [ pool[Math.floor(rng()*pool.length)], pool[Math.floor(rng()*pool.length)] ].map((v,i,arr)=> i===1 && arr[0]===v ? pool[(pool.indexOf(v)+1)%pool.length] : v);
     }
 
-    // ====== IA local de alta qualidade, por idioma ======
-    function buildResultsForOE(oeTitle, lang, kws){
-      const T = L[lang];
-      const base1 = oeTitle.toLowerCase();
-      const base2 = oeTitle.toLowerCase();
-      const r1 = {
-        titulo: T.resCon(oeTitle),
-        indicadores: [
-          { texto: T.indPct(base1), meta: T.metas(1).p1, meios_verificacao: T.movsBase() },
-          { texto: T.indNum(base1), meta: T.metas(1).n1, meios_verificacao: T.movsNum() }
-        ],
-        atividades: [ T.atvPlan(base1), T.atvExec(base1) ]
-      };
-      const r2 = {
-        titulo: T.resAmp(oeTitle),
-        indicadores: [
-          { texto: T.indPct(`ampliação de ${base2}`), meta: T.metas(1.1).p1, meios_verificacao: T.movsBase() },
-          { texto: T.indNum(`ampliação de ${base2}`), meta: T.metas(1.1).n1, meios_verificacao: T.movsNum() }
-        ],
-        atividades: [ T.atvPlan(`ampliação de ${base2}`), T.atvExec(`ampliação de ${base2}`) ]
-      };
-      if (kws.includes("monitoramento") || kws.includes("avaliacao") || kws.includes("evaluacion") || kws.includes("evaluation")){
-        const base3 = `M&A de ${base1}`;
-        const r3 = {
-          titulo: T.resMA(oeTitle),
-          indicadores: [
-            { texto: T.indPct(`mecanismos de M&A`), meta: T.metas(0.9).p1, meios_verificacao: T.movsBase() },
-            { texto: T.indEdt(), meta: "100%", meios_verificacao: T.movsEdt() }
-          ],
-          atividades: [ T.atvPlan(base3), T.atvExec(base3) ]
-        };
-        return [r1,r2,r3];
-      }
-      return [r1,r2];
+    // Atividades variadas
+    function activitiesFor(base, lang, rng){
+      const t = TPL[lang];
+      const a1 = { titulo:(lang==="en"?`Plan ${base}`:(lang==="es"?`Planificar ${base}`:`Planejar ${base}`)), descricao:t.atvPlan(base), logica_intervencao:(lang==="en"?"Sequence critical activities and align resources":(lang==="es"?"Secuenciar actividades críticas y alinear recursos":"Sequenciar atividades críticas e alinhar recursos")), prazo:"0–3 meses", meios_verificacao:t.movBase };
+      const a2 = { titulo:(lang==="en"?`Execute ${base}`:(lang==="es"?`Ejecutar ${base}`:`Executar ${base}`)), descricao:t.atvExec(base), logica_intervencao:(lang==="en"?"Iterate, monitor evidence and adapt":(lang==="es"?"Iterar, monitorear evidencias y adaptar":"Iterar, monitorar evidências e adaptar")), prazo:"3–6 meses", meios_verificacao:t.movBase };
+      const a3 = { titulo:(lang==="en"?`Train for ${base}`:(lang==="es"?`Capacitar para ${base}`:`Capacitar para ${base}`)), descricao:t.atvCap(base), logica_intervencao:(lang==="en"?"Build capacities and internal ownership":(lang==="es"?"Desarrollar capacidades y apropiación interna":"Desenvolver capacidades e apropriação interna")), prazo:"6–9 meses", meios_verificacao:t.movPart };
+      // escolhe 2 diferentes
+      const arr=[a1,a2,a3]; const i1=Math.floor(rng()*arr.length); let i2=Math.floor(rng()*arr.length); if(i2===i1) i2=(i2+1)%arr.length;
+      return [arr[i1],arr[i2]];
     }
 
-    function aiLikeGenerate(nomeProjeto, descricao, objetivos, editalText, lang){
-      const T = L[lang];
-      const kws = kw(descricao+" "+editalText, 20);
-      const foco = focusPhrase(kws, lang);
-      const pub = audience(descricao+" "+editalText, lang);
-      const og = T.og(ensureNoEllipsis(nomeProjeto), foco, pub);
-      const oes = (objetivos||[]).map((oe,idx)=>{
-        const t = ensureNoEllipsis(oe.titulo || `OE ${oe.numero||idx+1}`);
-        const rs = buildResultsForOE(t, lang, kws);
-        if (/palavras|caracteres|limite|words|characters|límite/i.test(editalText)){
-          rs.forEach(r=>{
-            r.indicadores.push({ texto: T.indEdt(), meta:"100%", meios_verificacao: T.movsEdt() });
-          });
-        }
-        return { numero: oe.numero||idx+1, titulo: t, resultados: rs };
+    // Geração por OE
+    function resultsForOE(title, lang, kws, rng){
+      const t = TPL[lang];
+      const verb1 = pick(rng, t.verbos);
+      let verb2 = pick(rng, t.verbos); if(verb2===verb1) verb2=pick(rng, t.verbos);
+      const rs = [];
+      const bases = [
+        title.toLowerCase(),
+        (kws[0]||title).toLowerCase()
+      ];
+      // Resultado 1
+      rs.push({
+        titulo: t.res(verb1, title),
+        indicadores: indicatorsFor(bases[0], lang, rng, 1.0),
+        atividades: activitiesFor(bases[0], lang, rng)
       });
-      return { objetivo_geral: og, objetivos_especificos: oes };
-    }
-
-    function ensureStructure(ml, nomeProjeto, descricao, objetivos, editalText, lang){
-      let out = ml && ml.objetivos_especificos && ml.objetivos_especificos.length ? ml : null;
-      if(!out) out = aiLikeGenerate(nomeProjeto, descricao, objetivos, editalText, lang);
-      if(!out.objetivo_geral) out.objetivo_geral = aiLikeGenerate(nomeProjeto, descricao, objetivos, editalText, lang).objetivo_geral;
-      out.objetivo_geral = ensureNoEllipsis(out.objetivo_geral);
-
-      out.objetivos_especificos = out.objetivos_especificos.map((oe,idx)=>{
-        const title = ensureNoEllipsis(oe.titulo || objetivos[idx]?.titulo || `OE ${oe.numero||idx+1}`);
-        let res = oe.resultados || [];
-        if(!res.length) res = aiLikeGenerate(nomeProjeto, descricao, [{numero:1,titulo:title}], editalText, lang).objetivos_especificos[0].resultados;
-        res = res.map((r,ri)=>{
-          r.titulo = ensureNoEllipsis(r.titulo || `${title} ${ri+1}`);
-          // indicadores completos
-          r.indicadores = (r.indicadores||[]).map(ind=>({
-            texto: ensureNoEllipsis(ind.texto || L[lang].indPct(title.toLowerCase())),
-            meta: ind.meta || L[lang].metas(1).p1,
-            meios_verificacao: ind.meios_verificacao && ind.meios_verificacao.length ? ind.meios_verificacao : L[lang].movsBase()
-          }));
-          while(r.indicadores.length<2){
-            r.indicadores.push({texto:L[lang].indNum(title.toLowerCase()), meta:L[lang].metas(1).n1, meios_verificacao:L[lang].movsNum()});
-          }
-          // atividades completas
-          const base = title.toLowerCase();
-          r.atividades = (r.atividades||[]).map((a,i)=>({
-            titulo: ensureNoEllipsis(a.titulo || (i===0?L[lang].atvPlan(base).titulo:L[lang].atvExec(base).titulo)),
-            descricao: ensureNoEllipsis(a.descricao || (i===0?L[lang].atvPlan(base).descricao:L[lang].atvExec(base).descricao)),
-            logica_intervencao: ensureNoEllipsis(a.logica_intervencao || (i===0?L[lang].atvPlan(base).logica_intervencao:L[lang].atvExec(base).logica_intervencao)),
-            prazo: a.prazo || (i===0?L[lang].atvPlan(base).prazo:L[lang].atvExec(base).prazo),
-            meios_verificacao: a.meios_verificacao && a.meios_verificacao.length ? a.meios_verificacao : (i===0?L[lang].atvPlan(base).meios_verificacao:L[lang].atvExec(base).meios_verificacao)
-          }));
-          while(r.atividades.length<2){
-            const seed = r.atividades.length===0 ? L[lang].atvPlan(base) : L[lang].atvExec(base);
-            r.atividades.push({...seed});
-          }
-          return r;
+      // Resultado 2
+      rs.push({
+        titulo: t.res(verb2, title),
+        indicadores: indicatorsFor(bases[1], lang, rng, 1.2),
+        atividades: activitiesFor(bases[1], lang, rng)
+      });
+      // Terceiro se edital fala de avaliação
+      if(kws.join(" ").match(/avali|evalu|evaluat|monitor/i)){
+        rs.push({
+          titulo: (lang==="en"?`Strengthen monitoring and evaluation for ${title}`:(lang==="es"?`Fortalecer el monitoreo y la evaluación de ${title}`:`Fortalecer monitoramento e avaliação de ${title}`)),
+          indicadores: indicatorsFor("monitoramento e avaliação", lang, rng, 0.9),
+          atividades: activitiesFor("monitoramento e avaliação", lang, rng)
         });
-        return { numero: oe.numero||idx+1, titulo: title, resultados: res };
-      });
-      return out;
+      }
+      return rs;
     }
 
-    // ====== Prévia ======
+    // Objetivo geral
+    function buildOG(nome, desc, edital, lang, rng){
+      const t = TPL[lang];
+      const foco = keyphrases(desc+" "+edital, 5).slice(0,3).join(", ");
+      const alvo = pick(rng, t.alvo);
+      const ab = pick(rng, t.abord);
+      return t.og(clean(nome), foco||"resultados prioritários", alvo, ab);
+    }
+
+    // IA local principal
+    function generateML(nome, desc, oes, edital, lang){
+      const seed = cyrb128(nome+"|"+desc+"|"+(oes||[]).map(o=>o.titulo).join("|")+"|"+lang)[0];
+      const rng = mulberry32(seed);
+      const kws = keyphrases(desc+" "+edital, 20);
+      const objetivo_geral = buildOG(nome, desc, edital, lang, rng);
+      const objetivos_especificos = (oes||[]).map((oe,idx)=>{
+        const titulo = clean(oe.titulo || `OE ${idx+1}`);
+        const rs = resultsForOE(titulo, lang, kws, rng);
+        return { numero: oe.numero||idx+1, titulo, resultados: rs };
+      });
+      return { objetivo_geral, objetivos_especificos };
+    }
+
+    // Prévia
     function renderPreview(ml, lang){
-      const T = L[lang].labels;
-      const tb = document.querySelector('#tbl tbody'); tb.innerHTML = "";
-      const push = (k,v)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${k}</b></td><td>${v||''}</td>`; tb.appendChild(tr); };
+      const L = LABEL[lang];
+      const tb = document.querySelector('#tbl tbody'); tb.innerHTML="";
+      const push=(k,v)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${k}</b></td><td>${v||''}</td>`; tb.appendChild(tr); };
 
-      push(T.geral, ml.objetivo_geral||"");
+      push(L.geral, ml.objetivo_geral);
       (ml.objetivos_especificos||[]).forEach((oe,idx)=>{
-        push(T.oe(oe.numero||idx+1), `${oe.titulo||''}`);
-        push("", `<b>${T.resultados}</b>`);
-        (oe.resultados||[]).forEach((r,i)=>{
-          push("", `<b>${ensureNoEllipsis(r.titulo||'')}</b>`);
-          push(T.indicadores, "");
-          (r.indicadores||[]).forEach((ind)=>{
-            push("•", `${ensureNoEllipsis(ind.texto||'')} | ${T.meta}: ${ind.meta||''} | ${T.mov}: ${joinMV(ind.meios_verificacao)}`);
+        push(L.oe(oe.numero||idx+1), oe.titulo);
+        push("", `<b>${L.resultados}</b>`);
+        (oe.resultados||[]).forEach((r)=>{
+          push("", `<b>${r.titulo}</b>`);
+          push(L.indic, "");
+          (r.indicadores||[]).forEach(ind=>{
+            push("•", `${ind.texto} | ${L.meta}: ${ind.meta} | ${L.mov}: ${joinMV(ind.meios_verificacao)}`);
           });
         });
-        push("", `<b>${T.atividades}</b>`);
-        (oe.resultados||[]).forEach((r)=>{
-          (r.atividades||[]).forEach((a)=>{
-            push("•", `<b>${ensureNoEllipsis(a.titulo||'')}</b> — ${ensureNoEllipsis(a.descricao||'')} | ${T.logica}: ${ensureNoEllipsis(a.logica_intervencao||'')} | ${T.prazo}: ${a.prazo||''} | ${T.mov}: ${joinMV(a.meios_verificacao)}`);
+        push("", `<b>${L.ativ}</b>`);
+        (oe.resultados||[]).forEach(r=>{
+          (r.atividades||[]).forEach(a=>{
+            push("•", `<b>${a.titulo}</b> — ${a.descricao} | ${L.log}: ${a.logica_intervencao} | ${L.prazo}: ${a.prazo} | ${L.mov}: ${joinMV(a.meios_verificacao)}`);
           });
         });
       });
-
-      document.getElementById('previewBox').style.display = 'block';
+      document.getElementById('previewBox').style.display='block';
     }
 
-    // ====== XLSX ======
+    // XLSX
     function baixarXlsx(ml, nomeProjeto, lang){
-      const T = L[lang].labels;
+      const L = LABEL[lang];
       const wb = XLSX.utils.book_new();
-      const aoa=[[ "MARCO LÓGICO" ],[ T.geral, ml.objetivo_geral||"" ]];
+      const aoa=[[ "MARCO LÓGICO" ],[ L.geral, ml.objetivo_geral||"" ]];
       (ml.objetivos_especificos||[]).forEach((oe,idx)=>{
-        aoa.push([ T.oe(oe.numero||idx+1), `${oe.titulo||''}` ]);
-        aoa.push(["", T.resultados, T.indicadores, T.meta, T.mov ]);
-        (oe.resultados||[]).forEach((r)=>{
-          const inds = r.indicadores||[];
-          const max = Math.max(1, inds.length);
-          for(let i=0;i<max;i++){
-            const ind = inds[i]||{};
-            aoa.push(["", i===0?(ensureNoEllipsis(r.titulo)||''):"", ensureNoEllipsis(ind.texto||""), ind.meta||"", joinMV(ind.meios_verificacao) ]);
+        aoa.push([ L.oe(oe.numero||idx+1), oe.titulo ]);
+        aoa.push(["", L.resultados, L.indic, L.meta, L.mov ]);
+        (oe.resultados||[]).forEach(r=>{
+          const inds=r.indicadores||[];
+          for(let i=0;i<inds.length;i++){
+            const ind=inds[i];
+            aoa.push(["", i===0?r.titulo:"", ind.texto, ind.meta, joinMV(ind.meios_verificacao)]);
           }
         });
-        aoa.push(["", T.atividades, T.desc, T.logica, T.prazo, T.mov ]);
-        (oe.resultados||[]).forEach((r)=>{
-          (r.atividades||[]).forEach((a)=>{
-            aoa.push(["", ensureNoEllipsis(a.titulo||""), ensureNoEllipsis(a.descricao||""), ensureNoEllipsis(a.logica_intervencao||""), a.prazo||"", joinMV(a.meios_verificacao) ]);
+        aoa.push(["", L.ativ, L.desc, L.log, L.prazo, L.mov ]);
+        (oe.resultados||[]).forEach(r=>{
+          (r.atividades||[]).forEach(a=>{
+            aoa.push(["", a.titulo, a.descricao, a.logica_intervencao, a.prazo, joinMV(a.meios_verificacao)]);
           });
         });
       });
       const ws=XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols']=[{wch:26},{wch:42},{wch:56},{wch:44},{wch:16},{wch:44}];
+      ws['!cols']=[{wch:26},{wch:46},{wch:58},{wch:44},{wch:16},{wch:44}];
       XLSX.utils.book_append_sheet(wb, ws, "Marco Lógico");
       const safe=(nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30);
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
-    // ====== Envio + IA local ======
-    const frm = document.getElementById('frm');
-    const statusEl = document.getElementById('status');
-    const diagBox = document.getElementById('diagBox');
-    const dlBtn = document.getElementById('dlXlsx');
-    let lastML = null; let lastLang = "pt";
+    // Ler edital
+    async function readFileText(file){
+      if(!file) return "";
+      if (file.type === "text/plain") return (await file.text()).slice(0,150000);
+      if (file.type === "application/pdf"){
+        const buf = new Uint8Array(await file.arrayBuffer());
+        const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+        const max = Math.min(pdf.numPages, 10);
+        let out=""; for(let p=1;p<=max;p++){ const page=await pdf.getPage(p); const txt=await page.getTextContent(); out+=txt.items.map(it=>it.str).join(" ")+"\n"; if(out.length>150000) break; }
+        return out.slice(0,150000);
+      }
+      if (file.name.endsWith(".docx")){
+        const ab = await file.arrayBuffer();
+        const r = await window.mammoth.extractRawText({arrayBuffer:ab});
+        return (r.value||"").slice(0,150000);
+      }
+      return "";
+    }
+
+    // Envio + geração local
+    const frm=document.getElementById('frm');
+    const statusEl=document.getElementById('status');
+    const diagBox=document.getElementById('diagBox');
+    const dlBtn=document.getElementById('dlXlsx');
+    let lastML=null, lastLang="pt";
 
     dlBtn.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value, lastLang); });
 
     frm.addEventListener('submit', async (e)=>{
       e.preventDefault();
       try{
-        statusEl.textContent = "Lendo edital e enviando...";
+        statusEl.textContent="Processando…";
         statusEl.classList.remove('error','success');
         diagBox.style.display='none'; diagBox.textContent='';
 
-        const lang = document.getElementById('lang').value || "pt";
-        lastLang = lang;
-
-        const nomeProjeto = ensureNoEllipsis((document.getElementById('nomeProjeto').value||"").trim());
-        const desc = ensureNoEllipsis((document.getElementById('desc').value||"").trim());
-        const n = parseInt(nOE.value||0);
-        if(!nomeProjeto || !desc || !n) throw new Error("Preencha nome, descrição e qtd. de objetivos.");
+        const lang=document.getElementById('lang').value||"pt"; lastLang=lang;
+        const nomeProjeto=clean(document.getElementById('nomeProjeto').value||"");
+        const desc=clean(document.getElementById('desc').value||"");
+        const n=parseInt(nOE.value||0);
+        if(!nomeProjeto||!desc||!n) throw new Error("Preencha nome, descrição e qtd. de objetivos.");
 
         const objetivosEspecificos=[];
         for(let i=1;i<=n;i++){
-          const t = ensureNoEllipsis((document.getElementById(`oe_t_${i}`).value||"").trim());
+          const t=clean(document.getElementById(`oe_t_${i}`).value||"");
           if(!t) throw new Error(`Preencha o título do OE ${i}.`);
           objetivosEspecificos.push({numero:i,titulo:t});
         }
 
-        const file = document.getElementById('edital').files?.[0];
-        const editalText = ensureNoEllipsis(await readFileText(file));
+        const file=document.getElementById('edital').files?.[0];
+        const editalText=clean(await readFileText(file));
 
-        const payload = {
-          nomeProjeto, descricaoProposta: desc, objetivosEspecificos,
-          objetivosEspecificosTexto: objetivosEspecificos.map(o=>`${o.numero}. ${o.titulo}`).join(' || '),
-          edital: "" // não enviar arquivo pesado
-        };
-
-        // chamada ao webhook existente
-        let responseText = "";
+        // chamada ao webhook existente (não dependemos do conteúdo)
         try{
-          const res = await fetch(WEBHOOK_URL,{
-            method:'POST',
-            headers:{'Content-Type':'text/plain;charset=UTF-8'},
-            body: JSON.stringify(payload)
-          });
-          const buf = new Uint8Array(await res.arrayBuffer());
-          responseText = utf8Decode(buf).trim();
+          await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body: JSON.stringify({nomeProjeto,descricaoProposta:desc,objetivosEspecificos,objetivosEspecificosTexto:objetivosEspecificos.map(o=>`${o.numero}. ${o.titulo}`).join(' || '),edital:""})});
         }catch(_){}
 
-        // tenta aproveitar backend, mas sem depender dele
-        let data = null;
-        if (responseText){
-          try{ data = JSON.parse(sliceToJsonEnvelope(responseText)); }catch{}
-        }
-        let ml = data?.marco_logico || data;
+        const ml = generateML(nomeProjeto, desc, objetivosEspecificos, editalText, lang);
 
-        // completar com IA local multilíngue
-        ml = ensureStructure(ml, nomeProjeto, desc, objetivosEspecificos, editalText, lang);
-
-        lastML = ml;
+        lastML=ml;
         renderPreview(ml, lang);
-        statusEl.textContent = data ? "✓ OK" : "✓ OK (IA local)";
+        statusEl.textContent="✓ OK (IA local variada)";
         statusEl.classList.add('success');
 
         diagBox.style.display='block';
-        diagBox.textContent = data
-          ? "Diagnóstico: backend OK; texto enriquecido por IA local com nome, descrição, OEs e edital."
-          : "Diagnóstico: resposta ausente/insuficiente; texto gerado por IA local com nome, descrição, OEs e edital.";
+        diagBox.textContent="Diagnóstico: textos gerados a partir de nome, descrição, OEs e edital, com variação determinística.";
       }catch(err){
-        statusEl.textContent = "Erro: " + err.message;
+        statusEl.textContent="Erro: "+err.message;
         statusEl.classList.add('error');
         diagBox.style.display='block';
-        diagBox.textContent = (err.stack||String(err));
+        diagBox.textContent=(err.stack||String(err));
       }
     });
   </script>
 </body>
 </html>
+
 
 
 
