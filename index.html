@@ -24,7 +24,7 @@
     .status{min-height:22px;color:var(--muted);margin:10px 0 0;font-size:14px}
     .status.error{color:#c62828}
     .status.success{color:var(--green)}
-    .debug{background:#f7f7f7;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto;display:none}
+    .debug{background:#f7f7f7;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;display:none}
     .table{margin-top:14px;background:#fff;border:1px solid #eee;border-radius:10px;overflow:auto}
     table{width:100%;border-collapse:collapse;font-size:14px}
     th,td{border-bottom:1px solid #eee;padding:8px 10px;vertical-align:top;word-break:break-word}
@@ -117,11 +117,40 @@
     }
     function collectAllB64(raw){
       const txt = String(raw||"");
-      const rx = /[A-Za-z0-9+/_=-]{16,}/g;
+      const rx = /[A-Za-z0-9+/_=-]{12,}/g; // aceita blocos menores
       const out = []; let m;
       while((m = rx.exec(txt)) !== null){ out.push(m[0]); }
       return out;
     }
+
+    // Base64 "loose" -> bytes (ignora chars não-base64, repõe padding)
+    function b64LooseToBytes(str){
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      const map = new Map(); for (let i=0;i<alphabet.length;i++) map.set(alphabet[i], i);
+      let s = (str||"").replace(/[\s\r\n\t\u200B-\u200F\u2028\u2029]/g,"")
+                       .replace(/-/g,"+").replace(/_/g,"/");
+      // remove tudo que não é base64
+      s = s.replace(/[^A-Za-z0-9+/=]/g,"");
+      // repõe padding
+      const m = s.length % 4; if (m) s += "=".repeat(4-m);
+
+      let buffer = 0, bits = 0;
+      const out = [];
+      for (let i=0; i<s.length; i++){
+        const ch = s[i];
+        if (ch === "="){ break; }
+        const val = map.get(ch);
+        if (val === undefined) continue;
+        buffer = (buffer << 6) | val;
+        bits += 6;
+        if (bits >= 8){
+          bits -= 8;
+          out.push((buffer >> bits) & 0xFF);
+        }
+      }
+      return new Uint8Array(out);
+    }
+
     function cleanB64Piece(s){
       if(!s) return "";
       let t = String(s)
@@ -134,38 +163,32 @@
       const m = t.length % 4; if (m) t += "=".repeat(4-m);
       return t;
     }
-    function b64ToBytes(b64){
-      const bin = atob(b64);
-      const out = new Uint8Array(bin.length);
-      for(let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
-      return out;
-    }
 
-    // Tenta decodificar um string Base64 (possivelmente percent-encoded, sem padding, ou levemente truncado)
-    function tryDecodeB64GzipLoose(b64Like, maxTrim=12){
-      let s = b64Like.trim();
+    function tryDecodeB64GzipLoose(b64Like, maxTrim=4096){
+      let s = (b64Like||"").trim();
+      try{ if (/%[0-9A-Fa-f]{2}/.test(s)) s = decodeURIComponent(s); }catch{}
 
-      // 1) desfaz percent-encoding se houver
+      // tentativa 1: atob padrão após limpeza
       try{
-        if (/%[0-9A-Fa-f]{2}/.test(s)) s = decodeURIComponent(s);
-      }catch{}
-
-      // 2) limpeza/padding
-      s = cleanB64Piece(s);
-
-      // 3) tentativa direta
-      try{
-        const b = b64ToBytes(s);
+        const t = cleanB64Piece(s);
+        const bin = atob(t);
+        const b = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) b[i]=bin.charCodeAt(i);
         const inner = isGzip(b) ? pako.ungzip(b) : b;
         return utf8Decode(inner);
       }catch{}
 
-      // 4) tolerância a finais corrompidos: recorta do fim e tenta de novo
+      // tentativa 2: decodificador "loose"
+      try{
+        const b = b64LooseToBytes(s);
+        const inner = isGzip(b) ? pako.ungzip(b) : b;
+        return utf8Decode(inner);
+      }catch{}
+
+      // tentativa 3: cortes progressivos grandes (tolerância a truncamento)
       for (let cut=1; cut<=maxTrim && s.length>32; cut++){
-        let cand = s.slice(0, s.length - cut);
-        const m = cand.length % 4; if (m) cand += "=".repeat(4-m);
         try{
-          const b = b64ToBytes(cand);
+          let cand = s.slice(0, s.length - cut);
+          const b = b64LooseToBytes(cand);
           const inner = isGzip(b) ? pako.ungzip(b) : b;
           return utf8Decode(inner);
         }catch{}
@@ -173,18 +196,14 @@
       throw new Error("decode-b64-loose-failed");
     }
 
-    // ====== Parser ======
+    // ====== Parser principal ======
     function parseProviderResponseFull(bytes, contentTypeHeader){
       const diag = { stage:"start", gunzip:false, steps:[], contentType: contentTypeHeader||null, preview:"" };
 
-      // TEXTO COMPLETO
+      // Texto completo
       let textFull = "";
-      if (bytes && bytes.length){
-        try{ textFull = utf8Decode(bytes).trim(); }catch{ textFull=""; }
-      }
-      if (!textFull){
-        throw Object.assign(new Error("Resposta vazia"), {diag});
-      }
+      if (bytes && bytes.length){ try{ textFull = utf8Decode(bytes).trim(); }catch{} }
+      if (!textFull){ throw Object.assign(new Error("Resposta vazia"), {diag}); }
 
       // A) JSON direto
       try{
@@ -195,11 +214,11 @@
         return {ok:true, data:obj, diag};
       }catch(e){ diag.steps.push("json-direct-failed"); }
 
-      // B) String inteira parece Base64/H4sIA
+      // B) Parecendo Base64/H4sIA
       const looksB64 = /^H4sIA|^[A-Za-z0-9+/=_-]+$/.test(textFull);
       if (looksB64){
         try{
-          const innerText = tryDecodeB64GzipLoose(textFull, 24);
+          const innerText = tryDecodeB64GzipLoose(textFull, 4096);
           const cand = sliceToJsonEnvelope(innerText).trim();
           const obj = JSON.parse(cand);
           diag.stage = "fulltext-b64-loose";
@@ -215,9 +234,9 @@
         const keys = ["marco_logico_b64","body","data","file","content","payload","bytes","response"];
         for (const k of keys){
           const v = probe && probe[k];
-          if (typeof v === "string" && v.length >= 16){
+          if (typeof v === "string" && v.length >= 12){
             try{
-              const innerText = tryDecodeB64GzipLoose(v, 24);
+              const innerText = tryDecodeB64GzipLoose(v, 4096);
               const cand = sliceToJsonEnvelope(innerText).trim();
               const obj = JSON.parse(cand);
               diag.stage = `json-field-${k}-b64-loose`;
@@ -230,12 +249,12 @@
         diag.steps.push("json-field-b64-loose-failed");
       }catch(e){ diag.steps.push("outer-json-probe-failed"); }
 
-      // D) Varredura de múltiplos blocos b64
+      // D) Varredura/união de múltiplos blocos
       try{
         const pieces = collectAllB64(textFull);
         if (pieces.length){
           const joined = pieces.map(cleanB64Piece).join("");
-          const innerText = tryDecodeB64GzipLoose(joined, 24);
+          const innerText = tryDecodeB64GzipLoose(joined, 4096);
           const cand = sliceToJsonEnvelope(innerText).trim();
           const obj = JSON.parse(cand);
           diag.stage = "scan-b64-joined-loose";
@@ -247,7 +266,7 @@
       }catch(e){ diag.steps.push("scan-b64-joined-loose-failed"); }
 
       diag.stage = "text-fallback";
-      diag.preview = textFull.slice(0,200);
+      diag.preview = textFull.slice(0,400); // preview maior p/ debug
       throw Object.assign(new Error("Falha ao interpretar resposta do provedor"), {diag});
     }
 
@@ -341,7 +360,7 @@
           edital: editalText
         };
 
-        // POST minimalista para reduzir preflight
+        // POST minimalista p/ reduzir preflight
         const res = await fetch(WEBHOOK_URL,{
           method:'POST',
           headers:{'Content-Type':'text/plain;charset=UTF-8'},
@@ -352,8 +371,7 @@
         const buf = new Uint8Array(await res.arrayBuffer());
 
         if(!res.ok){
-          let preview = "";
-          try{ preview = utf8Decode(buf).slice(0,200); }catch{}
+          let preview = ""; try{ preview = utf8Decode(buf).slice(0,200); }catch{}
           throw new Error(`HTTP ${res.status} | ${preview}`);
         }
         if(!buf || !buf.length){
@@ -362,7 +380,7 @@
 
         statusEl.textContent = "Interpretando resposta...";
 
-        // JSON direto (se o cenário devolver JSON)
+        // JSON direto
         if (contentType.includes('application/json')){
           try{
             const text = utf8Decode(buf);
@@ -378,7 +396,7 @@
           }catch(e){}
         }
 
-        // H4sIA/variações e demais casos
+        // H4sIA/variantes e outros formatos tolerados
         const parsed = parseProviderResponseFull(buf, contentType);
         const data = parsed.data;
         const ml = data?.marco_logico || data;
@@ -401,7 +419,6 @@
   </script>
 </body>
 </html>
-
 
 
 
