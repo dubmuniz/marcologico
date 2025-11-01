@@ -1,451 +1,113 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8">
-  <title>Marco Lógico — Humana Brasil</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <style>
-    :root{--green:#1E7E34;--ink:#1b1b1b;--bg:#fafafa;--muted:#667085}
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
-    .wrap{max-width:900px;margin:0 auto;padding:20px}
-    header{text-align:center;padding:20px 0}
-    h1{margin:0 0 6px;font-size:26px}
-    .lead{color:var(--muted);margin:0 0 12px}
-    form{background:#fff;border:1px solid #eee;border-radius:12px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-    .form-section{margin-bottom:18px}
-    label{display:block;margin:10px 0 6px;font-weight:600}
-    input,textarea,select{width:100%;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit}
-    textarea{resize:vertical;min-height:110px}
-    .file-info{background:#f0f7f4;border-left:4px solid var(--green);padding:10px;border-radius:6px;margin:8px 0;font-size:13px}
-    .objetivos-section{display:none}
-    .objetivos-section.ativa{display:block}
-    .objetivo-input-group{background:#f9f9f9;border:1px solid #e3e8ee;border-radius:8px;padding:12px;margin:8px 0}
-    button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 20px;font-weight:600;cursor:pointer;font-size:16px;width:100%}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    .status{min-height:22px;color:var(--muted);margin:12px 0 0;font-size:14px}
-    .status.error{color:#d32f2f}
-    .status.success{color:#1E7E34}
-    .debug-info{background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;font-size:12px;font-family:monospace;max-height:420px;overflow-y:auto;display:none;white-space:pre-wrap;word-break:break-all}
-    .debug-info.show{display:block}
-    .debug-actions{display:flex;gap:8px;margin-top:8px}
-    .debug-actions button{width:auto;background:#eee;color:#111}
-  </style>
-</head>
-<body>
-  <header class="wrap">
-    <h1>Marco Lógico</h1>
-    <p class="lead">Gerar a partir do edital e da proposta</p>
-  </header>
+<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><title>Marco Lógico — Humana Brasil</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><style>:root{--green:#1E7E34;--ink:#1b1b1b;--bg:#fafafa;--muted:#667085}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}.wrap{max-width:900px;margin:0 auto;padding:20px}header{text-align:center;padding:20px 0}h1{margin:0 0 6px;font-size:26px}.lead{color:var(--muted);margin:0 0 12px}form{background:#fff;border:1px solid #eee;border-radius:12px;padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.form-section{margin-bottom:18px}label{display:block;margin:10px 0 6px;font-weight:600}input,textarea,select{width:100%;border:1px solid #d8dee4;border-radius:8px;padding:12px;font:inherit}textarea{resize:vertical;min-height:110px}.file-info{background:#f0f7f4;border-left:4px solid var(--green);padding:10px;border-radius:6px;margin:8px 0;font-size:13px}.objetivos-section{display:none}.objetivos-section.ativa{display:block}.objetivo-input-group{background:#f9f9f9;border:1px solid #e3e8ee;border-radius:8px;padding:12px;margin:8px 0}button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 20px;font-weight:600;cursor:pointer;font-size:16px;width:100%}button:disabled{opacity:.6;cursor:not-allowed}.status{min-height:22px;color:var(--muted);margin:12px 0 0;font-size:14px}.status.error{color:#d32f2f}.status.success{color:#1E7E34}.debug-info{background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;font-size:12px;font-family:monospace;max-height:420px;overflow-y:auto;display:none;white-space:pre-wrap;word-break:break-all}.debug-info.show{display:block}</style></head><body><header class="wrap"><h1>Marco Lógico</h1><p class="lead">Gerar a partir do edital e da proposta</p></header><main class="wrap"><form id="marcoForm" novalidate><div class="form-section"><label>Arquivo do edital *<input type="file" id="edital" accept=".pdf,.docx,.txt" required></label><div id="editalInfo" class="file-info" style="display:none"></div></div><div class="form-section"><label>Nome do Projeto *<input id="nomeProjeto" type="text" required placeholder="Ex: Turismo Regenerativo na Ilha do Bananal"></label></div><div class="form-section"><label>Descrição da proposta *<textarea id="descricaoProposta" required placeholder="Contexto, atividades, público e resultados esperados"></textarea></label></div><div class="form-section"><label>Quantidade de objetivos específicos *<select id="numObjetivos" required><option value="">Selecione</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label></div><div class="form-section objetivos-section" id="objetivosSection"><div id="objetivosContainer"></div></div><button type="submit" id="submitBtn">Gerar marco lógico</button><p id="status" class="status"></p><div id="debugInfo" class="debug-info"></div></form></main><script>
+const WEBHOOK_URL='https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
+const MAX_EDITAL=10000,MAX_PROJ=400,MAX_PROP=2000,MAX_OBJS=4000;
+const form=document.getElementById('marcoForm');
+const editalInput=document.getElementById('edital');const editalInfo=document.getElementById('editalInfo');
+const numObjetivosSelect=document.getElementById('numObjetivos');const objetivosSection=document.getElementById('objetivosSection');const objetivosContainer=document.getElementById('objetivosContainer');
+const statusEl=document.getElementById('status');const submitBtn=document.getElementById('submitBtn');const debugInfo=document.getElementById('debugInfo');
+let editalConteudo='';let lastRaw='';
 
-  <main class="wrap">
-    <form id="marcoForm" novalidate>
-      <div class="form-section">
-        <label>Arquivo do edital *
-          <input type="file" id="edital" accept=".pdf,.docx,.txt" required>
-        </label>
-        <div id="editalInfo" class="file-info" style="display:none"></div>
-      </div>
+const sanitize=(s)=>s==null?'':String(s).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim();
+const objetivosToLine=(arr)=>Array.isArray(arr)?arr.map(o=>`${o.numero}. ${sanitize(o.titulo).replace(/"/g,'\\"')} | ${sanitize(o.descricao).replace(/"/g,'\\"')}`).join(' || '):'';
 
-      <div class="form-section">
-        <label>Nome do Projeto *
-          <input id="nomeProjeto" type="text" required placeholder="Ex: Turismo Regenerativo na Ilha do Bananal">
-        </label>
-      </div>
+function normalizeB64(s){if(!s)return'';let t=String(s).trim();t=t.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();t=t.replace(/^[`'"]+|[`'"]+$/g,'').trim();t=t.replace(/[\s\r\n\t]+/g,'');t=t.replace(/-/g,'+').replace(/_/g,'/');const pad=t.length%4;if(pad)t+='='.repeat(4-pad);t=t.replace(/[^A-Za-z0-9+/=]/g,'');return t;}
+function b64ToBytes(s){const bin=atob(s);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
+function ungzipOrInflate(bytes){try{return new TextDecoder().decode(pako.ungzip(bytes));}catch(e){}try{return new TextDecoder().decode(pako.inflate(bytes));}catch(e){}return null;}
 
-      <div class="form-section">
-        <label>Descrição da proposta *
-          <textarea id="descricaoProposta" required placeholder="Contexto, atividades, público e resultados esperados"></textarea>
-        </label>
-      </div>
+function extractB64Concat(raw){
+  const t=String(raw||'');
+  // pega TODOS os blocos longos de base64 e concatena
+  const matches=[...t.replace(/\s+/g,'').matchAll(/[A-Za-z0-9+/_-]{60,}={0,2}/g)].map(m=>m[0]);
+  if(matches.length>0){return {type:'regex-b64-joined', value: matches.join('') , count: matches.length};}
+  // se começar como JSON direto
+  if(t.trim().startsWith('{')) return {type:'json-direct', value:t};
+  return {type:'none', value:t};
+}
 
-      <div class="form-section">
-        <label>Quantidade de objetivos específicos *
-          <select id="numObjetivos" required>
-            <option value="">Selecione</option>
-            <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="form-section objetivos-section" id="objetivosSection">
-        <div id="objetivosContainer"></div>
-      </div>
-
-      <button type="submit" id="submitBtn">Gerar marco lógico</button>
-      <p id="status" class="status"></p>
-      <div id="debugInfo" class="debug-info"></div>
-      <div class="debug-actions" id="debugActions" style="display:none">
-        <button type="button" id="copyRaw">Copiar resposta crua</button>
-        <button type="button" id="copyHint">Copiar dica do Make</button>
-      </div>
-    </form>
-  </main>
-
-  <script>
-    // CONFIG
-    const WEBHOOK_URL = 'https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm';
-    const MAX_EDITAL = 10000, MAX_PROJ = 400, MAX_PROP = 2000, MAX_OBJS = 4000;
-
-    // UI refs
-    const form = document.getElementById('marcoForm');
-    const editalInput = document.getElementById('edital');
-    const editalInfo = document.getElementById('editalInfo');
-    const numObjetivosSelect = document.getElementById('numObjetivos');
-    const objetivosSection = document.getElementById('objetivosSection');
-    const objetivosContainer = document.getElementById('objetivosContainer');
-    const statusEl = document.getElementById('status');
-    const submitBtn = document.getElementById('submitBtn');
-    const debugInfo = document.getElementById('debugInfo');
-    const debugActions = document.getElementById('debugActions');
-
-    // Estado
-    let editalConteudo = '';
-    let lastPayload = null;
-    let lastRawResponse = '';
-
-    // Utils
-    const sanitizeString = (str) => (str==null?'':String(str).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').replace(/\r?\n/g,' ').replace(/\s+/g,' ').trim());
-    const objetivosToOneLine = (arr) => Array.isArray(arr)?arr.map(o=>`${o.numero}. ${sanitizeString(o.titulo).replace(/"/g,'\\"')} | ${sanitizeString(o.descricao).replace(/"/g,'\\"')}`).join(' || '):'';
-
-    // Base64 helpers
-    function normalizeB64Loose(s){
-      if(!s) return '';
-      let t = String(s).trim();
-      t = t.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
-      t = t.replace(/^[`'"]+|[`'"]+$/g,'').trim();
-      t = t.replace(/\s+/g,'');               // remove quebras e espaços
-      t = t.replace(/-/g,'+').replace(/_/g,'/'); // url-safe → padrão
-      const pad = t.length % 4; if (pad) t += '='.repeat(4-pad);
-      t = t.replace(/[^A-Za-z0-9+/=]/g,'');   // limpa qualquer ruído
-      return t;
+function parseFromProvider(raw){
+  const pick=extractB64Concat(raw);
+  if(pick.type==='json-direct'){
+    const txt=String(pick.value).trim(); try{const j=JSON.parse(txt); if(j&&j.marco_logico)return j;}catch(_){}
+  }
+  if(pick.type==='regex-b64-joined'){
+    const clean=normalizeB64(pick.value);
+    const bytes=b64ToBytes(clean);
+    let text=ungzipOrInflate(bytes);
+    if(!text){ // talvez era JSON plano em Base64
+      text=new TextDecoder().decode(bytes);
     }
-    function b64ToBytesLoose(s){
-      const clean = normalizeB64Loose(s);
-      const bin = atob(clean);
-      const out = new Uint8Array(bin.length);
-      for (let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
-      return out;
+    if(text){
+      let s=text.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
+      const i=s.indexOf('{"marco_logico"'); if(i>0)s=s.slice(i);
+      try{return JSON.parse(s);}catch(_){}
+      try{return JSON.parse(s.replace(/,(\s*[}\]])/g,'$1'));}catch(_){}
     }
-    function tryDecompress(bytes){
-      // 1) tentar GZIP
-      try{ return new TextDecoder('utf-8').decode(pako.ungzip(bytes)); }catch(e1){}
-      // 2) tentar ZLIB/deflate
-      try{ return new TextDecoder('utf-8').decode(pako.inflate(bytes)); }catch(e2){}
-      return null;
-    }
+    const e=new Error('Falha ao interpretar JSON da IA'); e._detail=`b64_len=${clean.length} chunks=${pick.count}`; throw e;
+  }
+  const e=new Error('Falha ao interpretar JSON da IA'); e._detail='no-b64-found'; throw e;
+}
 
-    // Extração agressiva de candidato Base64
-    function extractCandidateB64(respText){
-      let t = String(respText||'').trim();
+function normalizeOut(data,payload){
+  const ml=data?.marco_logico||{}; const og=(ml.objetivo_geral||payload?.descricaoProposta||payload?.nomeProjeto||'não informado').trim();
+  const objs=Array.isArray(ml.objetivos_especificos)?ml.objetivos_especificos:[];
+  return {marco_logico:{objetivo_geral:og,objetivos_especificos:objs}};
+}
 
-      // Muito curto → certamente errado (ex.: "2")
-      if (t.length < 40) return {type:'too-short', value:t};
-
-      // JSON direto com marco_logico
-      if (t.startsWith('{')) {
-        try {
-          const j = JSON.parse(t);
-          if (j && j.marco_logico) return {type:'json-direct', value: JSON.stringify(j)};
-          const paths = [
-            ['b64'], ['data'], ['content'], ['result'], ['output'], ['output_text'],
-            ['choices',0,'message','content'], ['choices',0,'text']
-          ];
-          for (const p of paths){
-            let cur = j, ok = true;
-            for(const k of p){ if (cur && (k in cur)) cur = cur[k]; else {ok=false;break;} }
-            if (ok && typeof cur === 'string' && cur.length>40) return {type:'json-b64', value: cur};
-          }
-        } catch(e){/* segue */}
-      }
-
-      // Regex bruto pega a “H4sIA…” completa
-      const m2 = t.replace(/\s+/g,'').match(/([A-Za-z0-9+/_-]{80,}={0,2})/);
-      if (m2) return {type:'regex-b64-raw', value: m2[1]};
-
-      return {type:'no-candidate', value:t};
-    }
-
-    // Parser tolerante: agora tenta ungzip e inflate
-    function parseFromProvider(raw){
-      const cand = extractCandidateB64(String(raw||'').trim());
-
-      if (cand.type === 'too-short' || cand.type === 'no-candidate') {
-        const err = new Error('Falha ao interpretar JSON da IA');
-        err._path = cand.type;
-        err._snippet = (cand.value||'').slice(0,200);
-        throw err;
-      }
-      if (cand.type === 'json-direct') return JSON.parse(cand.value);
-
-      const bytes = b64ToBytesLoose(cand.value);
-
-      // gzip/deflate
-      const text = tryDecompress(bytes);
-      if (text){
-        let clean = text.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
-        const start = clean.indexOf('{"marco_logico"'); if (start>0) clean = clean.slice(start);
-        try { return JSON.parse(clean); } catch{}
-        try { return JSON.parse(clean.replace(/,(\s*[}\]])/g,'$1')); } catch{}
-        const err = new Error('Falha ao interpretar JSON da IA');
-        err._path = cand.type + ' (decompress)';
-        err._snippet = clean.slice(0,200);
-        throw err;
-      }
-
-      // como último recurso: base64 de JSON plano
-      const asText = new TextDecoder('utf-8').decode(bytes);
-      let clean = asText.replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
-      const start = clean.indexOf('{"marco_logico"'); if (start>0) clean = clean.slice(start);
-      try { return JSON.parse(clean); } catch{}
-      try { return JSON.parse(clean.replace(/,(\s*[}\]])/g,'$1')); } catch{}
-      const err = new Error('Falha ao interpretar JSON da IA');
-      err._path = cand.type + ' (plain-b64)';
-      err._snippet = clean.slice(0,200);
-      throw err;
-    }
-
-    // Normalizador mínimo
-    function normalizeMarco(data, payload){
-      const ml = data?.marco_logico || {};
-      const objetivoGeral = (ml.objetivo_geral || payload?.descricaoProposta || payload?.nomeProjeto || 'não informado').trim();
-      const solicitados = Array.isArray(payload?.objetivosEspecificos) ? payload.objetivosEspecificos.length : 0;
-      const baseObjs = Array.isArray(ml.objetivos_especificos) ? ml.objetivos_especificos : [];
-
-      while(baseObjs.length < solicitados){
-        const i = baseObjs.length;
-        const src = payload.objetivosEspecificos[i];
-        baseObjs.push({ numero: i+1, titulo: (src?.titulo||(`Objetivo ${i+1}`)), descricao: (src?.descricao||''), resultados: [], atividades: [] });
-      }
-      return { marco_logico: { objetivo_geral: objetivoGeral, objetivos_especificos: baseObjs } };
-    }
-
-    // XLSX
-    function gerarXLSX(responseData, nomeProjeto) {
-      const marco = responseData.marco_logico || {};
-      const objetivos = Array.isArray(marco.objetivos_especificos) ? marco.objetivos_especificos : [];
-      const wb = XLSX.utils.book_new();
-
-      const aoa = [];
-      const merges = [];
-      const T = (v) => (v==null ? '' : String(v)).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').trim();
-      const J = (arr) => Array.isArray(arr) ? arr.map((x)=>T(x.texto||x.descricao||x)).filter(Boolean).join('; ') : T(arr);
-
-      aoa.push(['MARCO LÓGICO']); merges.push({s:{r:0,c:0},e:{r:0,c:7}});
-      aoa.push(['Objetivo Geral', T(marco.objetivo_geral||'')]); merges.push({s:{r:1,c:1},e:{r:1,c:7}});
-
-      objetivos.forEach((obj, idx) => {
-        aoa.push([`Objetivo Específico ${obj.numero||idx+1}`, T(obj.titulo||obj.descricao||'')]);
-        merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:7}});
-
-        const startRIndex = aoa.length;
-        aoa.push(['RESULTADOS OBJETIVO '+(obj.numero||idx+1), 'Indicadores', 'Meta', 'Meios de Verificação', '', '', '', '']);
-
-        const resultados = Array.isArray(obj.resultados) ? obj.resultados : [];
-        let linhas = 0;
-
-        resultados.forEach((res) => {
-          const inds = Array.isArray(res.indicadores) ? res.indicadores : [];
-          const movs = Array.isArray(res.meios_verificacao) ? res.meios_verificacao : [];
-          const max = Math.max(1, inds.length, movs.length);
-          for (let i = 0; i < max; i++) {
-            const ind = inds[i] || {};
-            aoa.push([
-              i===0 ? T(res.titulo||res.descricao||'') : '',
-              T(ind.texto||''),
-              T(ind.meta||''),
-              J(ind.meios_verificacao?.length ? ind.meios_verificacao : movs),
-              '', '', '', ''
-            ]);
-            linhas++;
-          }
-        });
-
-        if (linhas === 0) { aoa.push(['Sem resultados definidos', '', '', '', '', '', '', '']); linhas = 1; }
-
-        aoa.push(['', 'Atividades', 'Lógica de Intervenção', 'Prazo', '', '', '', '']);
-        const atividades = resultados.flatMap(r=>Array.isArray(r.atividades)?r.atividades:[]);
-        if (atividades.length === 0) {
-          aoa.push(['', 'Sem atividades definidas', '', '', '', '', '', '']);
-        } else {
-          atividades.forEach((atv) => {
-            aoa.push(['', T(atv.titulo||atv.descricao||''), T(atv.logica_intervencao||atv.logica||''), T(atv.prazo||''), '', '', '', '']);
-          });
-        }
-      });
-
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols'] = [{ wch: 36 }, { wch: 42 }, { wch: 22 }, { wch: 38 }, { wch: 4 }, { wch: 4 }, { wch: 4 }, { wch: 4 }];
-      ws['!merges'] = merges;
-      const range = XLSX.utils.decode_range(ws['!ref']||'A1:A1');
-      for(let R=range.s.r; R<=range.e.r; R++){
-        for(let C=range.s.c; C<=range.e.c; C++){
-          const addr = XLSX.utils.encode_cell({r:R,c:C});
-          if(!ws[addr]) continue;
-          ws[addr].s = {alignment:{wrapText:true,vertical:'top'}};
-        }
-      }
-      XLSX.utils.book_append_sheet(wb, ws, 'Marco Lógico');
-
-      const wsR = XLSX.utils.aoa_to_sheet([
-        ['MARCO LÓGICO - RESUMO'], [''],
-        ['Nome do Projeto', String(nomeProjeto||'')],
-        ['Objetivo Geral', T(marco.objetivo_geral||'')],
-        ['Data', new Date().toLocaleDateString('pt-BR')]
-      ]);
-      wsR['!cols'] = [{ wch: 20 }, { wch: 70 }];
-      XLSX.utils.book_append_sheet(wb, wsR, 'Resumo');
-
-      const ts = Date.now();
-      const nomeSeguro = (nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').substring(0,30);
-      XLSX.writeFile(wb, `Marco_Logico_${nomeSeguro}_${ts}.xlsx`);
-    }
-
-    // Leitura arquivos
-    async function lerPDF(file){
-      const buf = await file.arrayBuffer();
-      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-      let texto=''; for(let p=1;p<=pdf.numPages;p++){ const page=await pdf.getPage(p); const tc=await page.getTextContent(); texto += tc.items.map(i=>i.str).join(' ')+' '; }
-      return sanitizeString(texto);
-    }
-    async function lerDOCX(file){
-      const buf = await file.arrayBuffer(); const res = await mammoth.extractRawText({arrayBuffer:buf}); return sanitizeString(res.value);
-    }
-
-    // UI dinâmico
-    editalInput.addEventListener('change', async (e)=>{
-      const file=e.target.files[0]; if(!file) return;
-      statusEl.textContent='Lendo arquivo...'; statusEl.classList.remove('error','success'); debugInfo.classList.remove('show'); document.getElementById('debugActions').style.display='none';
-      try{
-        const name=file.name.toLowerCase();
-        if(name.endsWith('.txt')||file.type==='text/plain'){editalConteudo=await file.text();}
-        else if(name.endsWith('.pdf')||file.type==='application/pdf'){editalConteudo=await lerPDF(file);}
-        else if(name.endsWith('.docx')||name.endsWith('.doc')){editalConteudo=await lerDOCX(file);}
-        else{throw new Error('Formato não suportado. Use PDF, DOCX ou TXT.');}
-        editalConteudo=sanitizeString(editalConteudo);
-        if(editalConteudo.length>MAX_EDITAL){editalConteudo=editalConteudo.slice(0,MAX_EDITAL)+'... [truncado]';}
-        if(!editalConteudo||editalConteudo.length<10) throw new Error('Arquivo vazio ou com conteúdo insuficiente');
-        editalInfo.style.display='block'; editalInfo.textContent=`✓ ${file.name} carregado`;
-        statusEl.textContent='';
-      }catch(err){ statusEl.textContent='Erro ao ler arquivo: '+err.message; statusEl.classList.add('error'); editalInfo.style.display='none'; editalConteudo='';}
-    });
-
-    numObjetivosSelect.addEventListener('change',(e)=>{
-      const n=parseInt(e.target.value)||0;
-      objetivosContainer.innerHTML='';
-      if(n>0){
-        document.getElementById('objetivosSection').classList.add('ativa');
-        for(let i=1;i<=n;i++){
-          const div=document.createElement('div'); div.className='objetivo-input-group';
-          div.innerHTML=`<strong>Objetivo Específico ${i}</strong>
-            <input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required>
-            <textarea name="oe_descricao_${i}" placeholder="Descrição detalhada do objetivo ${i}" required></textarea>`;
-          objetivosContainer.appendChild(div);
-        }
-      } else document.getElementById('objetivosSection').classList.remove('ativa');
-    });
-
-    document.getElementById('copyRaw')?.addEventListener('click', ()=>{
-      if(!lastRawResponse) return;
-      navigator.clipboard.writeText(lastRawResponse);
-      alert('Resposta crua copiada.');
-    });
-    document.getElementById('copyHint')?.addEventListener('click', ()=>{
-      const hint = 'No "Webhook response" use Body = string Base64 do Claude. Ex.: {{Claude[1].content}} ou {{join(map(Claude[1].content; text); "")}}. Content-Type: text/plain.';
-      navigator.clipboard.writeText(hint);
-      alert('Dica copiada.');
-    });
-
-    // Submit
-    form.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      debugInfo.classList.remove('show'); debugInfo.innerHTML=''; document.getElementById('debugActions').style.display='none';
-      statusEl.classList.remove('error','success');
-      if(!editalConteudo){ statusEl.textContent='Por favor, carregue o arquivo do edital'; statusEl.classList.add('error'); return; }
-
-      const nomeProjeto=sanitizeString(document.getElementById('nomeProjeto').value);
-      const descricaoProposta=sanitizeString(document.getElementById('descricaoProposta').value);
-      const n=parseInt(numObjetivosSelect.value)||0;
-      if(!nomeProjeto||!descricaoProposta||!n){ statusEl.textContent='Por favor, preencha todos os campos obrigatórios'; statusEl.classList.add('error'); return; }
-
-      const objetivosEspecificos=[];
-      for(let i=1;i<=n;i++){
-        const t=sanitizeString(form[`oe_titulo_${i}`].value);
-        const d=sanitizeString(form[`oe_descricao_${i}`].value);
-        if(!t||!d){ statusEl.textContent=`Por favor, preencha completamente o objetivo ${i}`; statusEl.classList.add('error'); return; }
-        objetivosEspecificos.push({numero:i,titulo:t.substring(0,200),descricao:d.substring(0,500)});
-      }
-
-      const payload={
-        edital_b64: btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+editalConteudo).slice(0,MAX_EDITAL)))),
-        nomeProjeto_b64: btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+nomeProjeto).slice(0,MAX_PROJ)))),
-        descricaoProposta_b64: btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+descricaoProposta).slice(0,MAX_PROP)))),
-        objetivosEspecificosTexto_b64: btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+objetivosToOneLine(objetivosEspecificos)).slice(0,MAX_OBJS)))),
-        nomeProjeto, descricaoProposta, objetivosEspecificos,
-        objetivosEspecificosTexto: objetivosToOneLine(objetivosEspecificos),
-        filled_at: new Date().toISOString().slice(0,10),
-        type: 'marco_logico'
-      };
-      lastPayload = payload;
-
-      try{
-        submitBtn.disabled=true;
-        statusEl.textContent='Enviando dados para processamento...';
-
-        const resp=await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json, text/plain'},body:JSON.stringify(payload)});
-        const respText = await resp.text();
-        lastRawResponse = respText;
-
-        if(!resp.ok){ throw new Error(`Erro HTTP: ${resp.status} ${resp.statusText} | ${respText.slice(0,600)}`); }
-
-        statusEl.textContent='Interpretando resposta da IA...';
-        let parsed;
-        try{
-          parsed = parseFromProvider(respText);
-        }catch(e){
-          statusEl.classList.add('error');
-          const short = (respText||'').slice(0,200);
-          const likelyMake = (short.length<40 || /^[0-9]+$/.test(short.trim()));
-          debugInfo.textContent =
-            'Diagnóstico do parser: ' + (e._path ? `[${e._path}] ` : '') + (e.message||'') +
-            '\nPrévia retorno: ' + short +
-            (likelyMake ? '\n>> O retorno é muito curto (ex.: "2"). No Webhook response, Body deve ser a STRING Base64 do Claude. Content-Type: text/plain.' : '');
-          debugInfo.classList.add('show');
-          document.getElementById('debugActions').style.display='flex';
-          throw e;
-        }
-
-        const normalized = normalizeMarco(parsed, lastPayload);
-
-        statusEl.textContent='Gerando arquivo Excel...';
-        gerarXLSX(normalized, nomeProjeto);
-
-        statusEl.textContent='✓ Marco Lógico gerado com sucesso!';
-        statusEl.classList.add('success');
-      }catch(err){
-        if(!statusEl.classList.contains('error')){
-          statusEl.textContent=`Erro: ${err.message}`;
-          statusEl.classList.add('error');
-        }
-        if(!debugInfo.classList.contains('show')){
-          debugInfo.textContent = (err && err.stack) ? err.stack : String(err);
-          debugInfo.classList.add('show');
-          document.getElementById('debugActions').style.display='flex';
-        }
-      }finally{
-        submitBtn.disabled=false;
+function xlsxOut(data,nome){
+  const ml=data.marco_logico||{}; const objs=Array.isArray(ml.objetivos_especificos)?ml.objetivos_especificos:[];
+  const wb=XLSX.utils.book_new(); const aoa=[]; const merges=[];
+  const T=v=>(v==null?'':String(v)).replace(/\uFEFF/g,'').replace(/[\u0000-\u001F\u007F-\u009F]/g,'').trim();
+  const J=a=>Array.isArray(a)?a.map(x=>T(x.texto||x.descricao||x)).filter(Boolean).join('; '):T(a);
+  aoa.push(['MARCO LÓGICO']); merges.push({s:{r:0,c:0},e:{r:0,c:7}});
+  aoa.push(['Objetivo Geral',T(ml.objetivo_geral||'')]); merges.push({s:{r:1,c:1},e:{r:1,c:7}});
+  objs.forEach((obj,idx)=>{
+    aoa.push([`Objetivo Específico ${obj.numero||idx+1}`,T(obj.titulo||obj.descricao||'')]); merges.push({s:{r:aoa.length-1,c:1},e:{r:aoa.length-1,c:7}});
+    const start=aoa.length; aoa.push(['RESULTADOS OBJETIVO '+(obj.numero||idx+1),'Indicadores','Meta','Meios de Verificação','','','','']);
+    const res=Array.isArray(obj.resultados)?obj.resultados:[]; let linhas=0;
+    res.forEach(r=>{
+      const inds=Array.isArray(r.indicadores)?r.indicadores:[]; const movs=Array.isArray(r.meios_verificacao)?r.meios_verificacao:[];
+      const max=Math.max(1,inds.length,movs.length);
+      for(let i=0;i<max;i++){
+        const ind=inds[i]||{}; aoa.push([i===0?T(r.titulo||r.descricao||''):'',T(ind.texto||''),T(ind.meta||''),J(ind.meios_verificacao?.length?ind.meios_verificacao:movs),'','','','']); linhas++;
       }
     });
-  </script>
-</body>
-</html>
+    if(linhas===0){aoa.push(['Sem resultados definidos','','','','','','','']);linhas=1;}
+    aoa.push(['','Atividades','Lógica de Intervenção','Prazo','','','','']);
+    const atividades=res.flatMap(r=>Array.isArray(r.atividades)?r.atividades:[]);
+    if(atividades.length===0){aoa.push(['','Sem atividades definidas','','','','','','']);}
+    else{atividades.forEach(a=>aoa.push(['',T(a.titulo||a.descricao||''),T(a.logica_intervencao||a.logica||''),T(a.prazo||''),'','','','']));}
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:36},{wch:42},{wch:22},{wch:38},{wch:4},{wch:4},{wch:4},{wch:4}]; ws['!merges']=merges;
+  const range=XLSX.utils.decode_range(ws['!ref']||'A1:A1'); for(let R=range.s.r;R<=range.e.r;R++){for(let C=range.s.c;C<=range.e.c;C++){const addr=XLSX.utils.encode_cell({r:R,c:C}); if(ws[addr]) ws[addr].s={alignment:{wrapText:true,vertical:'top'}};}}
+  XLSX.utils.book_append_sheet(wb,ws,'Marco Lógico');
+  const wsR=XLSX.utils.aoa_to_sheet([['MARCO LÓGICO - RESUMO'],[''],['Nome do Projeto',String(nome||'')],['Objetivo Geral',T(ml.objetivo_geral||'')],['Data',new Date().toLocaleDateString('pt-BR')]]); wsR['!cols']=[{wch:20},{wch:70}]; XLSX.utils.book_append_sheet(wb,wsR,'Resumo');
+  const ts=Date.now(); const safe=(nome||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').substring(0,30); XLSX.writeFile(wb,`Marco_Logico_${safe}_${ts}.xlsx`);
+}
+
+async function readPDF(file){const buf=await file.arrayBuffer();pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';const pdf=await pdfjsLib.getDocument({data:buf}).promise;let t='';for(let p=1;p<=pdf.numPages;p++){const pg=await pdf.getPage(p);const tc=await pg.getTextContent();t+=tc.items.map(i=>i.str).join(' ')+' ';}return sanitize(t);}
+async function readDOCX(file){const buf=await file.arrayBuffer();const r=await mammoth.extractRawText({arrayBuffer:buf});return sanitize(r.value);}
+
+editalInput.addEventListener('change',async e=>{const f=e.target.files[0]; if(!f)return; statusEl.textContent='Lendo arquivo...'; debugInfo.classList.remove('show'); try{const n=f.name.toLowerCase(); if(n.endsWith('.txt')||f.type==='text/plain'){editalConteudo=await f.text();} else if(n.endsWith('.pdf')||f.type==='application/pdf'){editalConteudo=await readPDF(f);} else if(n.endsWith('.docx')||n.endsWith('.doc')){editalConteudo=await readDOCX(f);} else{throw new Error('Formato não suportado. Use PDF, DOCX ou TXT.');} editalConteudo=sanitize(editalConteudo); if(editalConteudo.length>MAX_EDITAL){editalConteudo=editalConteudo.slice(0,MAX_EDITAL)+'... [truncado]';} if(!editalConteudo||editalConteudo.length<10) throw new Error('Arquivo vazio ou insuficiente'); editalInfo.style.display='block'; editalInfo.textContent='✓ arquivo carregado'; statusEl.textContent=''; }catch(err){statusEl.textContent='Erro ao ler arquivo: '+err.message; statusEl.classList.add('error'); editalInfo.style.display='none'; editalConteudo='';}});
+
+numObjetivosSelect.addEventListener('change',e=>{const n=parseInt(e.target.value)||0; objetivosContainer.innerHTML=''; if(n>0){objetivosSection.classList.add('ativa'); for(let i=1;i<=n;i++){const d=document.createElement('div'); d.className='objetivo-input-group'; d.innerHTML=`<strong>Objetivo Específico ${i}</strong><input type="text" name="oe_titulo_${i}" placeholder="Título do objetivo ${i}" required><textarea name="oe_descricao_${i}" placeholder="Descrição detalhada do objetivo ${i}" required></textarea>`; objetivosContainer.appendChild(d);} } else {objetivosSection.classList.remove('ativa');}});
+
+form.addEventListener('submit',async e=>{e.preventDefault(); debugInfo.classList.remove('show'); statusEl.classList.remove('error','success'); if(!editalConteudo){statusEl.textContent='Carregue o arquivo do edital'; statusEl.classList.add('error'); return;}
+const nome=sanitize(document.getElementById('nomeProjeto').value); const desc=sanitize(document.getElementById('descricaoProposta').value); const n=parseInt(numObjetivosSelect.value)||0;
+if(!nome||!desc||!n){statusEl.textContent='Preencha todos os campos obrigatórios'; statusEl.classList.add('error'); return;}
+const o=[]; for(let i=1;i<=n;i++){const t=sanitize(form[`oe_titulo_${i}`].value); const d=sanitize(form[`oe_descricao_${i}`].value); if(!t||!d){statusEl.textContent=`Preencha o objetivo ${i}`; statusEl.classList.add('error'); return;} o.push({numero:i,titulo:t.substring(0,200),descricao:d.substring(0,500)});}
+const payload={edital_b64:btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+editalConteudo).slice(0,MAX_EDITAL)))),nomeProjeto_b64:btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+nome).slice(0,MAX_PROJ)))),descricaoProposta_b64:btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+desc).slice(0,MAX_PROP)))),objetivosEspecificosTexto_b64:btoa(unescape(encodeURIComponent(("INSTRUCOES_GERACAO\n"+objetivosToLine(o)).slice(0,MAX_OBJS)))),nomeProjeto:nome,descricaoProposta:desc,objetivosEspecificos:o,objetivosEspecificosTexto:objetivosToLine(o),filled_at:new Date().toISOString().slice(0,10),type:'marco_logico'};
+try{
+  submitBtn.disabled=true; statusEl.textContent='Enviando dados para processamento...';
+  const resp=await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json, text/plain'},body:JSON.stringify(payload)});
+  const txt=await resp.text(); lastRaw=txt; if(!resp.ok) throw new Error(`Erro HTTP: ${resp.status} ${resp.statusText} | ${txt.slice(0,600)}`);
+  statusEl.textContent='Interpretando resposta da IA...';
+  let parsed; try{parsed=parseFromProvider(txt);}catch(err){statusEl.classList.add('error'); debugInfo.textContent=`Diagnóstico do parser: ${err._detail||''}\nPrévia retorno: ${(txt||'').slice(0,200)}`; debugInfo.classList.add('show'); throw err;}
+  const normalized=normalizeOut(parsed,payload); statusEl.textContent='Gerando arquivo Excel...'; xlsxOut(normalized,nome); statusEl.textContent='✓ Marco Lógico gerado com sucesso!'; statusEl.classList.add('success');
+}catch(err){if(!statusEl.classList.contains('error')){statusEl.textContent=`Erro: ${err.message}`; statusEl.classList.add('error');} if(!debugInfo.classList.contains('show')){debugInfo.textContent=(err&&err.stack)?err.stack:String(err); debugInfo.classList.add('show');}
+}finally{submitBtn.disabled=false;}
+});
+</script></body></html>
+
 
 
 
