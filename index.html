@@ -29,8 +29,8 @@
     table{width:100%;border-collapse:collapse;font-size:14px}
     th,td{border-bottom:1px solid #eee;padding:8px 10px;vertical-align:top;word-break:break-word}
     th{background:#f6fbf6;color:#0f5132;text-align:left;position:sticky;top:0}
-    td{white-space:pre-wrap} /* mantém parágrafos na prévia */
-    .right{display:flex;gap:8px;justify-content:flex-end}
+    td{white-space:pre-wrap}
+    .right{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
   </style>
 </head>
 <body>
@@ -82,6 +82,7 @@
       <table id="tbl"><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody></tbody></table>
       <div class="right" style="padding:10px">
         <button id="dlXlsx">Baixar XLSX</button>
+        <button id="dlDocx">Baixar DOCX</button>
       </div>
     </div>
   </main>
@@ -90,6 +91,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
 
   <script>
     const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
@@ -177,20 +179,15 @@
       }
     };
 
-    // Frase base a partir do título do OE, com artigo adequado
     function baseNP(title, lang){
       const t = clean(title.toLowerCase());
-      if(lang==="en") return t; // sem artigo
-      if(lang==="es"){
-        return /^[aeiouáéíóú]/.test(t) ? `la ${t}` : `el ${t}`;
-      }
-      // pt
+      if(lang==="en") return t;
+      if(lang==="es"){ return /^[aeiouáéíóú]/.test(t) ? `la ${t}` : `el ${t}`; }
       return /^[aeiouáéíóú]/.test(t) ? `a ${t}` : `o ${t}`;
     }
 
-    // Indicadores variados
     function indicatorsFor(base, lang, rng, escala=1){
-      const L = LABEL[lang], T = TPL[lang];
+      const T = TPL[lang];
       const pct = Math.min(96, 72 + Math.floor(rng()*18) + Math.floor(8*escala));
       const num = 80 + Math.floor(rng()*70) + Math.floor(20*escala);
       const qlt = 70 + Math.floor(rng()*20);
@@ -207,7 +204,6 @@
       return [pool[i1], pool[i2]];
     }
 
-    // Atividades variadas com frases completas
     function activitiesFor(title, lang, rng){
       const T = TPL[lang];
       const base = baseNP(title, lang);
@@ -300,11 +296,9 @@
         const titulo = clean(oe.titulo || `OE ${idx+1}`);
         const rs = resultsForOE(titulo, lang, kws, rng);
         if (/palavras|caracteres|limite|words|characters|límite/i.test(edital)){
-          rs.forEach(r=>{
-            const txt = lang==="en" ? "Compliance with call requirements and limits" : lang==="es" ? "Conformidad con requisitos y límites del llamado" : "Conformidade com requisitos e limites do edital";
-            const mv  = lang==="en" ? ["Compliance checklist","Final submitted version"] : lang==="es" ? ["Lista de verificación de conformidad","Versión final presentada"] : ["Checklist de conformidade","Versão final submetida"];
-            r.indicadores.push({ texto: txt, meta: "100%", meios_verificacao: mv });
-          });
+          const txt = lang==="en" ? "Compliance with call requirements and limits" : lang==="es" ? "Conformidad con requisitos y límites del llamado" : "Conformidade com requisitos e limites do edital";
+          const mv  = lang==="en" ? ["Compliance checklist","Final submitted version"] : lang==="es" ? ["Lista de verificación de conformidad","Versión final presentada"] : ["Checklist de conformidade","Versão final submetida"];
+          rs.forEach(r=>r.indicadores.push({ texto: txt, meta: "100%", meios_verificacao: mv }));
         }
         return { numero: oe.numero||idx+1, titulo, resultados: rs };
       });
@@ -338,7 +332,7 @@
       document.getElementById('previewBox').style.display='block';
     }
 
-    // XLSX com quebras de linha para “moldar” o texto na célula
+    // XLSX
     function baixarXlsx(ml, nomeProjeto, lang){
       const L = LABEL[lang];
       const wb = XLSX.utils.book_new();
@@ -350,37 +344,77 @@
           const inds=r.indicadores||[];
           for(let i=0;i<inds.length;i++){
             const ind=inds[i];
-            const indText = `${ind.texto}`;
-            const movText = `${joinMV(ind.meios_verificacao)}`;
-            aoa.push(["", i===0?`${r.titulo}`:"", indText, ind.meta, movText ]);
+            aoa.push(["", i===0?`${r.titulo}`:"", `${ind.texto}`, ind.meta, `${joinMV(ind.meios_verificacao)}` ]);
           }
         });
         aoa.push(["", L.ativ, L.desc, L.log, L.prazo, L.mov ]);
         (oe.resultados||[]).forEach(r=>{
           (r.atividades||[]).forEach(a=>{
-            const desc = `${a.descricao}`;
-            const log  = `${a.logica_intervencao}`;
-            const mov  = `${joinMV(a.meios_verificacao)}`;
-            // inserir parágrafos com \n
-            aoa.push(["", `${a.titulo}`, desc, log, a.prazo, mov ]);
+            aoa.push(["", `${a.titulo}`, `${a.descricao}`, `${a.logica_intervencao}`, a.prazo, `${joinMV(a.meios_verificacao)}` ]);
           });
         });
       });
       const ws=XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols']=[{wch:26},{wch:46},{wch:58},{wch:44},{wch:18},{wch:44}]; // larguras generosas
+      ws['!cols']=[{wch:26},{wch:46},{wch:58},{wch:44},{wch:18},{wch:44}];
       XLSX.utils.book_append_sheet(wb, ws, "Marco Lógico");
       const safe=(nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30);
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
+    }
+
+    // DOCX
+    async function baixarDocx(ml, nomeProjeto, lang){
+      const { Document, Paragraph, TextRun, HeadingLevel, Packer } = window.docx;
+      const L = LABEL[lang];
+
+      const children = [];
+      children.push(new Paragraph({ text: "MARCO LÓGICO", heading: HeadingLevel.HEADING_1 }));
+      children.push(new Paragraph({ text: `${L.geral}: `, heading: HeadingLevel.HEADING_2 }));
+      children.push(new Paragraph(ml.objetivo_geral||""));
+
+      (ml.objetivos_especificos||[]).forEach((oe,idx)=>{
+        children.push(new Paragraph({ text: `${L.oe(oe.numero||idx+1)} — ${oe.titulo}`, heading: HeadingLevel.HEADING_2 }));
+        children.push(new Paragraph({ text: L.resultados, heading: HeadingLevel.HEADING_3 }));
+        (oe.resultados||[]).forEach((r)=>{
+          children.push(new Paragraph({ text: r.titulo, heading: HeadingLevel.HEADING_4 }));
+          children.push(new Paragraph({ text: L.indic, heading: HeadingLevel.HEADING_5 }));
+          (r.indicadores||[]).forEach((ind)=>{
+            children.push(new Paragraph(new TextRun(`• ${ind.texto}`)));
+            children.push(new Paragraph(new TextRun(`${L.meta}: ${ind.meta}`)));
+            children.push(new Paragraph(new TextRun(`${L.mov}: ${joinMV(ind.meios_verificacao)}`)));
+          });
+        });
+        children.push(new Paragraph({ text: L.ativ, heading: HeadingLevel.HEADING_3 }));
+        (oe.resultados||[]).forEach((r)=>{
+          (r.atividades||[]).forEach((a)=>{
+            children.push(new Paragraph({ text: a.titulo, heading: HeadingLevel.HEADING_4 }));
+            children.push(new Paragraph(new TextRun(`${L.desc}: ${a.descricao}`)));
+            children.push(new Paragraph(new TextRun(`${L.log}: ${a.logica_intervencao}`)));
+            children.push(new Paragraph(new TextRun(`${L.prazo}: ${a.prazo}`)));
+            children.push(new Paragraph(new TextRun(`${L.mov}: ${joinMV(a.meios_verificacao)}`)));
+          });
+        });
+      });
+
+      const doc = new Document({ sections:[{ children }] });
+      const blob = await Packer.toBlob(doc);
+      const safe=(nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Marco_Logico_${safe}_${Date.now()}.docx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 3000);
     }
 
     // Envio + geração local
     const frm=document.getElementById('frm');
     const statusEl=document.getElementById('status');
     const diagBox=document.getElementById('diagBox');
-    const dlBtn=document.getElementById('dlXlsx');
+    const dlX=document.getElementById('dlXlsx');
+    const dlD=document.getElementById('dlDocx');
     let lastML=null, lastLang="pt";
 
-    dlBtn.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value, lastLang); });
+    dlX.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value, lastLang); });
+    dlD.addEventListener('click', ()=>{ if(lastML) baixarDocx(lastML, document.getElementById('nomeProjeto').value, lastLang); });
 
     frm.addEventListener('submit', async (e)=>{
       e.preventDefault();
@@ -405,7 +439,7 @@
         const file=document.getElementById('edital').files?.[0];
         const editalText=clean(await readFileText(file));
 
-        // webhook mantido, sem dependência do retorno
+        // webhook mantido, sem depender do retorno
         try{
           await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body: JSON.stringify({nomeProjeto,descricaoProposta:desc,objetivosEspecificos,objetivosEspecificosTexto:objetivosEspecificos.map(o=>`${o.numero}. ${o.titulo}`).join(' || '),edital:""})});
         }catch(_){}
