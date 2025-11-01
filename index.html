@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — Parser Base64+GZIP robusto</title>
+  <title>Marco Lógico — Parser robusto</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Front robusto para respostas Base64+GZIP do provedor</p>
+    <p class="lead">Front robusto para respostas do provedor</p>
   </header>
 
   <main class="wrap">
@@ -70,17 +70,13 @@
     <div id="diagBox" class="debug"></div>
 
     <div id="previewBox" class="table" style="display:none">
-      <table id="tbl">
-        <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
-        <tbody></tbody>
-      </table>
+      <table id="tbl"><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody></tbody></table>
       <div class="right" style="padding:10px">
         <button id="dlXlsx">Baixar XLSX</button>
       </div>
     </div>
   </main>
 
-  <!-- libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -88,7 +84,7 @@
     // ====== CONFIG ======
     const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
 
-    // ====== UI: gerar blocos de OE (apenas TÍTULO, sem descrição) ======
+    // ====== UI OEs: só título ======
     const nOE = document.getElementById('nOE');
     const oesDiv = document.getElementById('oes');
     nOE.addEventListener('change', () => {
@@ -107,18 +103,11 @@
       }
     });
 
-    // ====== Util: extrair texto do arquivo (mínimo para TXT) ======
-    async function readFileText(file){
-      if(!file) return '';
-      if (file.type === 'text/plain') return (await file.text()).slice(0,50000);
-      return '';
-    }
-
-    // ====== Helpers ======
+    // ====== Utils ======
     function isGzip(bytes){ return bytes && bytes.length>2 && bytes[0]===0x1f && bytes[1]===0x8b; }
     function utf8Decode(bytes){
-      try { return new TextDecoder('utf-8', {fatal:false}).decode(bytes); }
-      catch { return String.fromCharCode.apply(null, bytes); }
+      try{ return new TextDecoder('utf-8',{fatal:false}).decode(bytes); }
+      catch{ return String.fromCharCode.apply(null, bytes); }
     }
     function sliceToJsonEnvelope(txt){
       if(!txt) return "";
@@ -129,8 +118,7 @@
     function collectAllB64(raw){
       const txt = String(raw||"");
       const rx = /[A-Za-z0-9+/_=-]{40,}/g;
-      const out = [];
-      let m;
+      const out = []; let m;
       while((m = rx.exec(txt)) !== null){ out.push(m[0]); }
       return out;
     }
@@ -153,66 +141,85 @@
       return out;
     }
 
-    // ====== Parser principal: aceita bytes e texto =================================
-    function parseProviderResponse({bytes, text}){
-      const diag = {stage:"start", gunzip:false, tried:["bytes","text","b64"], preview:""};
+    // ====== Parser unificado sobre BYTES e TEXTO COMPLETO ======
+    function parseProviderResponseFull(bytes, contentTypeHeader){
+      const diag = { stage:"start", gunzip:false, steps:[], contentType: contentTypeHeader||null, preview:"" };
 
-      // 1) Se vier GZIP cru nos BYTES
-      if (bytes && bytes.length){
+      // A) BYTES = GZIP cru
+      if (bytes && isGzip(bytes) && window.pako){
         try{
-          if (isGzip(bytes) && window.pako){
-            const gunz = pako.ungzip(bytes);
-            const txt = utf8Decode(gunz).replace(/^\uFEFF/,"");
-            const cand = sliceToJsonEnvelope(txt).trim();
-            const obj = JSON.parse(cand);
-            diag.stage="bytes-gzip";
-            diag.gunzip=true;
-            diag.preview=cand.slice(0,160);
-            return {ok:true, data:obj, diag};
-          }
-        }catch(e){}
-      }
-
-      // 2) Tentar TEXT direto como JSON
-      if (text){
-        try{
-          const trimmed = text.replace(/^\uFEFF/,"").trim();
-          const cand = sliceToJsonEnvelope(trimmed);
+          const gunz = pako.ungzip(bytes);
+          const txt = utf8Decode(gunz).replace(/^\uFEFF/,"");
+          const cand = sliceToJsonEnvelope(txt).trim();
           const obj = JSON.parse(cand);
-          diag.stage="text-json";
+          diag.stage="bytes-gzip";
+          diag.gunzip=true;
           diag.preview=cand.slice(0,160);
           return {ok:true, data:obj, diag};
-        }catch(e){}
+        }catch(e){ diag.steps.push("bytes-gzip-failed"); }
       }
 
-      // 3) Tentar extrair Base64 do TEXT
-      if (text){
+      // B) BYTES = texto UTF-8 plano
+      let textFull = "";
+      if (bytes){
+        try{ textFull = utf8Decode(bytes); }catch{ textFull = ""; }
+      }
+      if (textFull){
+        // B1) JSON direto
         try{
-          const pieces = collectAllB64(text);
+          const cand = sliceToJsonEnvelope(textFull.replace(/^\uFEFF/,"")).trim();
+          const obj = JSON.parse(cand);
+          diag.stage="bytes-text-json";
+          diag.preview=cand.slice(0,160);
+          return {ok:true, data:obj, diag};
+        }catch(e){ diag.steps.push("bytes-text-json-failed"); }
+
+        // B2) JSON com campo Base64 comum do Make
+        // Campos usuais: body, data, file, content, payload
+        try{
+          const objProbe = JSON.parse(sliceToJsonEnvelope(textFull));
+          const b64Fields = ["body","data","file","content","payload","bytes","response"];
+          for (const k of b64Fields){
+            const v = objProbe && objProbe[k];
+            if (typeof v === "string" && v.length > 40){
+              const cleaned = cleanB64Piece(v);
+              try{
+                const b = b64ToBytes(cleaned);
+                let inner = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
+                inner = sliceToJsonEnvelope(inner).trim();
+                const objInner = JSON.parse(inner);
+                diag.stage = `json-field-${k}-b64`;
+                diag.gunzip = isGzip(b);
+                diag.preview = inner.slice(0,160);
+                return {ok:true, data:objInner, diag};
+              }catch(e){}
+            }
+          }
+          diag.steps.push("json-fields-b64-not-found");
+        }catch(e){ diag.steps.push("outer-json-probe-failed"); }
+
+        // B3) Varredura de Base64 no texto bruto
+        try{
+          const pieces = collectAllB64(textFull);
           if (pieces.length){
             const joined = pieces.map(cleanB64Piece).join("");
             const b = b64ToBytes(joined);
-            let txt;
-            if (isGzip(b) && window.pako){
-              txt = utf8Decode(pako.ungzip(b));
-              diag.gunzip = true;
-              diag.stage = "b64-gzip";
-            }else{
-              txt = utf8Decode(b);
-              diag.stage = "b64-plain";
-            }
-            const cand = sliceToJsonEnvelope(txt.replace(/^\uFEFF/,"")).trim();
-            const obj = JSON.parse(cand);
-            diag.preview=cand.slice(0,160);
-            return {ok:true, data:obj, diag};
+            let inner = isGzip(b) ? utf8Decode(pako.ungzip(b)) : utf8Decode(b);
+            inner = sliceToJsonEnvelope(inner).trim();
+            const objInner = JSON.parse(inner);
+            diag.stage = isGzip(b) ? "scan-b64-gzip" : "scan-b64-plain";
+            diag.gunzip = isGzip(b);
+            diag.preview = inner.slice(0,160);
+            return {ok:true, data:objInner, diag};
           }
-        }catch(e){}
+          diag.steps.push("scan-b64-none");
+        }catch(e){ diag.steps.push("scan-b64-failed"); }
       }
 
       throw Object.assign(new Error("Falha ao interpretar resposta do provedor"), {diag});
     }
 
-    // ====== Prévia em tabela ======
+    // ====== Prévia ======
     function renderPreview(ml){
       const tb = document.querySelector('#tbl tbody'); tb.innerHTML = "";
       const push = (k,v)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${k}</b></td><td>${v||''}</td>`; tb.appendChild(tr); };
@@ -262,11 +269,10 @@
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
-    // ====== Envio ao Make e processamento ======
+    // ====== Envio ao Make e parsing ======
     const frm = document.getElementById('frm');
     const statusEl = document.getElementById('status');
     const diagBox = document.getElementById('diagBox');
-    const btn = document.getElementById('btn');
     const dlBtn = document.getElementById('dlXlsx');
     let lastML = null;
 
@@ -275,7 +281,9 @@
     frm.addEventListener('submit', async (e)=>{
       e.preventDefault();
       try{
-        btn.disabled = true; statusEl.textContent = "Enviando ao Make..."; diagBox.style.display='none'; statusEl.classList.remove('error','success');
+        statusEl.textContent = "Enviando ao Make...";
+        statusEl.classList.remove('error','success');
+        diagBox.style.display='none';
 
         const nomeProjeto = (document.getElementById('nomeProjeto').value||"").trim();
         const desc = (document.getElementById('desc').value||"").trim();
@@ -286,11 +294,15 @@
         for(let i=1;i<=n;i++){
           const t = (document.getElementById(`oe_t_${i}`).value||"").trim();
           if(!t) throw new Error(`Preencha o título do OE ${i}.`);
-          objetivosEspecificos.push({numero:i,titulo:t}); // sem descrição
+          objetivosEspecificos.push({numero:i,titulo:t});
         }
 
+        // arquivo texto simples opcional
         const file = document.getElementById('edital').files?.[0];
-        const editalText = await readFileText(file);
+        let editalText = '';
+        if (file && file.type === 'text/plain') {
+          editalText = (await file.text()).slice(0,50000);
+        }
 
         const payload = {
           nomeProjeto, descricaoProposta: desc, objetivosEspecificos,
@@ -304,18 +316,17 @@
           body:JSON.stringify(payload)
         });
 
-        // Sempre leia como bytes
+        const contentType = res.headers.get('content-type')||'';
         const buf = new Uint8Array(await res.arrayBuffer());
-        // Tente inferir um texto amigável para diagnóstico sem quebrar os bytes
-        let textPreview = "";
-        try{ textPreview = utf8Decode(buf).slice(0,200); }catch{}
 
         if(!res.ok){
-          throw new Error(`HTTP ${res.status} | ${textPreview}`);
+          let preview = "";
+          try{ preview = utf8Decode(buf).slice(0,200); }catch{}
+          throw new Error(`HTTP ${res.status} | ${preview}`);
         }
 
-        statusEl.textContent = "Interpretando resposta da IA...";
-        const parsed = parseProviderResponse({bytes: buf, text: textPreview});
+        statusEl.textContent = "Interpretando resposta...";
+        const parsed = parseProviderResponseFull(buf, contentType);
         const data = parsed.data;
         const ml = data?.marco_logico || data;
         if(!ml || !ml.objetivos_especificos){ throw new Error("JSON sem campo 'marco_logico' válido."); }
@@ -332,15 +343,11 @@
         statusEl.classList.add('error');
         diagBox.style.display='block';
         diagBox.textContent = (err.diag ? "Diagnóstico do parser:\n"+JSON.stringify(err.diag,null,2)+"\n\n" : "") + (err.stack||String(err));
-      }finally{
-        btn.disabled = false;
       }
     });
   </script>
 </body>
 </html>
-
-
 
 
 
