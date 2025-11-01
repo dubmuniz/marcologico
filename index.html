@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — Front com proxy CORS e parser robusto</title>
+  <title>Marco Lógico — POST simples sem preflight CORS</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -35,7 +35,7 @@
 <body>
   <header class="wrap">
     <h1>Marco Lógico</h1>
-    <p class="lead">Front com proxy CORS e parser GZIP/Base64/JSON</p>
+    <p class="lead">POST simples text/plain para evitar preflight, parser GZIP/Base64/JSON</p>
   </header>
 
   <main class="wrap">
@@ -77,17 +77,14 @@
     </div>
   </main>
 
-  <!-- libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <script>
     // ====== CONFIG ======
-    // Substitua pela URL do seu Worker do Cloudflare (proxy CORS) que repassa ao Make.
-    // Exemplo: "https://proxy-make-marco-logico.seuusuario.workers.dev"
-    const WEBHOOK_URL = "https://proxy-make-marco-logico.seuusuario.workers.dev";
+    const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
 
-    // ====== UI: gerar campos para OEs (apenas TÍTULO) ======
+    // ====== UI OEs: só título ======
     const nOE = document.getElementById('nOE');
     const oesDiv = document.getElementById('oes');
     nOE.addEventListener('change', () => {
@@ -203,7 +200,7 @@
         diag.steps.push("json-fields-b64-not-found");
       }catch(e){ diag.steps.push("outer-json-probe-failed"); }
 
-      // B3) Varredura Base64 no texto bruto
+      // B3) Varredura Base64
       try{
         const pieces = collectAllB64(textFull);
         if (pieces.length){
@@ -225,7 +222,7 @@
       throw Object.assign(new Error("Falha ao interpretar resposta do provedor"), {diag});
     }
 
-    // ====== Prévia em tabela ======
+    // ====== Prévia ======
     function renderPreview(ml){
       const tb = document.querySelector('#tbl tbody'); tb.innerHTML = "";
       const push = (k,v)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${k}</b></td><td>${v||''}</td>`; tb.appendChild(tr); };
@@ -275,7 +272,7 @@
       XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
     }
 
-    // ====== Envio ao proxy + parsing ======
+    // ====== Envio ao Make com POST simples text/plain ======
     const frm = document.getElementById('frm');
     const statusEl = document.getElementById('status');
     const diagBox = document.getElementById('diagBox');
@@ -289,8 +286,7 @@
       try{
         statusEl.textContent = "Enviando...";
         statusEl.classList.remove('error','success');
-        diagBox.style.display='none';
-        diagBox.textContent='';
+        diagBox.style.display='none'; diagBox.textContent='';
 
         const nomeProjeto = (document.getElementById('nomeProjeto').value||"").trim();
         const desc = (document.getElementById('desc').value||"").trim();
@@ -316,13 +312,11 @@
           edital: editalText
         };
 
+        // POST simples: sem custom headers além de Content-Type text/plain
         const res = await fetch(WEBHOOK_URL,{
           method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(payload),
-          mode: 'cors',
-          redirect: 'follow',
-          cache: 'no-store'
+          headers:{'Content-Type':'text/plain;charset=UTF-8'},
+          body: JSON.stringify(payload)
         });
 
         const contentType = res.headers.get('content-type')||'';
@@ -338,7 +332,7 @@
         }
 
         statusEl.textContent = "Interpretando resposta...";
-        // Tenta JSON direto se o proxy retornou application/json
+        // Caso o Make responda JSON direto
         if (contentType.includes('application/json')){
           try{
             const text = utf8Decode(buf);
@@ -378,8 +372,6 @@
   </script>
 </body>
 </html>
-
-
 
 
 
