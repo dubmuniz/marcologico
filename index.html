@@ -1,246 +1,1147 @@
 <!doctype html>
 <html lang="pt-br">
 <head>
-  <meta charset="utf-8">
-  <title>Gerador de Marco Lógico — Tabela</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gerador de Marco Lógico (Texto Pronto)</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
+    :root{
+      --bg:#f6f7f9;
+      --card:#ffffff;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --line:#d1d5db;
+      --head:#eef0f3;
+      --accent:#1e7e34;
+      --accent2:#0f5a25;
+      --radius:14px;
+    }
     body{
       margin:0;
-      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
-      background:#fafafa;
-      color:#1b1b1b;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:var(--bg);
+      color:var(--text);
     }
     .wrap{
-      max-width:1200px;
-      margin:0 auto;
-      padding:20px;
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px;
     }
-    h1{
-      font-size:24px;
-      margin-bottom:16px;
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(16,24,40,.06);
+      overflow:hidden;
     }
-    form{
-      background:#fff;
-      border:1px solid #ddd;
-      border-radius:8px;
-      padding:16px;
-      margin-bottom:24px;
+    .header{
+      padding: 18px 18px 8px 18px;
+      border-bottom:1px solid var(--line);
     }
-    label{
-      font-weight:600;
-      display:block;
-      margin-top:12px;
-      margin-bottom:6px;
+    .header h1{
+      font-size: 18px;
+      margin:0;
     }
-    input, textarea, select{
-      width:100%;
-      padding:8px;
-      border:1px solid #ccc;
-      border-radius:6px;
-      font:inherit;
+    .header p{
+      margin:6px 0 0 0;
+      color:var(--muted);
+      font-size: 13px;
+      line-height:1.35;
     }
-    textarea{min-height:90px}
-    .row{
+    .form{
+      padding: 16px 18px 18px 18px;
       display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:12px;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 14px;
     }
-    button{
-      margin-top:16px;
-      background:#1E7E34;
-      color:#fff;
+    .field{ display:flex; flex-direction:column; gap:6px; }
+    label{
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input[type="text"], input[type="number"], textarea, select{
+      border:1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline:none;
+      background:#fff;
+    }
+    textarea{ min-height: 120px; resize: vertical; }
+    .full{ grid-column: 1 / -1; }
+    .row{
+      grid-column: 1 / -1;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin-top: 4px;
+    }
+    .btn{
       border:0;
-      padding:10px 16px;
-      border-radius:6px;
-      font-weight:600;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
       cursor:pointer;
+      background: var(--accent);
+      color:#fff;
     }
-
-    table{
-      width:100%;
-      border-collapse:collapse;
-      background:#e6e6e6;
-      font-size:14px;
+    .btn:hover{ background: var(--accent2); }
+    .btn.secondary{
+      background:#111827;
     }
-    th, td{
-      border:1px solid #bfbfbf;
-      padding:8px 10px;
-      vertical-align:top;
-    }
-    th{
-      background:#d9d9d9;
-      font-weight:600;
-      text-align:left;
-    }
-    .col-obj{
-      width:220px;
-      font-weight:600;
-      background:#d9d9d9;
+    .btn.secondary:hover{ background:#0b1220; }
+    .hint{
+      font-size:12px;
+      color:var(--muted);
+      margin-left:auto;
     }
     .preview{
+      padding: 14px 18px 18px 18px;
+      border-top:1px solid var(--line);
       background:#fff;
-      border:1px solid #ccc;
-      padding:12px;
-      overflow:auto;
+    }
+    .preview h2{
+      font-size: 14px;
+      margin: 0 0 10px 0;
+      color:#111827;
+    }
+    table{
+      width:100%;
+      border-collapse: collapse;
+      border:1px solid var(--line);
+      table-layout: fixed;
+      background:#fff;
+    }
+    th, td{
+      border:1px solid var(--line);
+      padding: 10px 10px;
+      vertical-align: top;
+      font-size: 13px;
+      line-height:1.35;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    th{
+      background: var(--head);
+      font-weight: 800;
+    }
+    td.section{
+      background: var(--head);
+      font-weight: 800;
+      width: 210px;
+    }
+    td.subhead{
+      background: var(--head);
+      font-weight: 800;
+    }
+    .footer{
+      padding: 12px 18px 18px 18px;
+      border-top:1px solid var(--line);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      background:#fff;
+    }
+    .pill{
+      font-size:12px;
+      color:var(--muted);
+      background:#f3f4f6;
+      border:1px solid #e5e7eb;
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+    .error{
+      color:#b91c1c;
+      font-size: 12px;
+      margin-top: 6px;
     }
   </style>
 </head>
+
 <body>
-
-<div class="wrap">
-  <h1>Gerador de Marco Lógico</h1>
-
-  <form id="frm">
-    <label>Título do Projeto</label>
-    <input id="titulo" required>
-
-    <label>Descrição da Proposta</label>
-    <textarea id="descricao" required></textarea>
-
-    <div class="row">
-      <div>
-        <label>Idioma de saída</label>
-        <select id="lang">
-          <option value="pt" selected>Português</option>
-          <option value="en">English</option>
-          <option value="es">Español</option>
-        </select>
+  <div class="wrap">
+    <div class="card">
+      <div class="header">
+        <h1>Gerador de Marco Lógico com textos prontos</h1>
+        <p>
+          Gera Objetivo Geral, Objetivos Específicos, Resultados, Indicadores, Metas e Meios de Verificação com textos completos,
+          distintos entre si e coerentes com a descrição do projeto. Inclui prévia e download em XLSX.
+        </p>
       </div>
-      <div>
-        <label>Duração do projeto, em meses</label>
-        <input type="number" id="meses" value="12" min="1" max="60" required>
+
+      <div class="form">
+        <div class="field full">
+          <label for="title">Título do projeto</label>
+          <input id="title" type="text" placeholder="Ex.: Fortalecimento de cadeias locais de economia circular por meio do Repense e Reuse" />
+        </div>
+
+        <div class="field">
+          <label for="lang">Língua de saída</label>
+          <select id="lang">
+            <option value="pt">Português</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="nObjectives">Número de objetivos específicos</label>
+          <input id="nObjectives" type="number" min="1" max="6" value="3" />
+        </div>
+
+        <div class="field">
+          <label for="months">Duração do projeto (meses)</label>
+          <input id="months" type="number" min="6" max="60" value="36" />
+        </div>
+
+        <div class="field">
+          <label for="edital">Arquivo do edital (opcional)</label>
+          <input id="edital" type="file" />
+        </div>
+
+        <div class="field full">
+          <label for="desc">Descrição do projeto</label>
+          <textarea id="desc" placeholder="Cole aqui a descrição do projeto, com contexto, territórios, público, atividades e o que se quer mudar."></textarea>
+          <div id="err" class="error" style="display:none;"></div>
+        </div>
+
+        <div class="row full">
+          <button class="btn" id="btnGenerate">Gerar prévia</button>
+          <button class="btn secondary" id="btnDownload" disabled>Baixar XLSX</button>
+          <span class="hint">Dica: quanto mais concreta a descrição, melhor a diferenciação dos textos.</span>
+        </div>
+      </div>
+
+      <div class="preview" id="preview" style="display:none;">
+        <h2>Prévia</h2>
+        <div id="tableWrap"></div>
+      </div>
+
+      <div class="footer">
+        <span class="pill" id="metaPill">Sem prévia ainda</span>
+        <span class="pill" id="themePill">Tema: auto</span>
       </div>
     </div>
-
-    <div class="row">
-      <div>
-        <label>Número de Objetivos Específicos</label>
-        <select id="nOE">
-          <option>1</option>
-          <option selected>2</option>
-          <option>3</option>
-          <option>4</option>
-        </select>
-      </div>
-      <div>
-        <label>Arquivo do Edital, opcional</label>
-        <input type="file" id="edital" accept=".pdf,.docx,.txt">
-      </div>
-    </div>
-
-    <button type="submit">Gerar Marco Lógico</button>
-  </form>
-
-  <div id="previewBox" class="preview" style="display:none">
-    <table id="tbl"></table>
-    <button id="baixarXlsx">Baixar XLSX</button>
   </div>
-</div>
 
 <script>
-function gerarTextoBase(desc){
-  return desc.split(".")[0] || desc;
+/* =========================
+   1) Helpers de texto
+   ========================= */
+
+const STOP_PT = new Set([
+  "de","da","do","das","dos","para","por","com","sem","sobre","entre","e","ou","a","o","as","os","um","uma","uns","umas",
+  "no","na","nos","nas","ao","aos","à","às","que","como","em","se","ser","são","foi","for","faz","fazer","feito","essa","esse",
+  "essas","esses","isso","isto","aquele","aquela","aquilo","muito","muita","muitos","muitas","mais","menos","também","já","ainda",
+  "durante","ao","mesmo","mesma","seu","sua","seus","suas","nosso","nossa","nossos","nossas","onde","quando","porque","pois",
+  "projeto","iniciativa","ações","ação","atividades","atividade"
+]);
+const STOP_EN = new Set([
+  "the","a","an","and","or","to","for","of","in","on","with","without","between","among","as","is","are","was","were","be","been",
+  "this","that","these","those","it","its","their","our","your","by","from","at","into","during","over","more","less","also",
+  "project","initiative","activities","activity","actions","action"
+]);
+
+function cleanText(s){
+  return (s || "")
+    .replace(/\s+/g," ")
+    .replace(/[“”]/g,'"')
+    .replace(/[’]/g,"'")
+    .trim();
 }
 
-function gerarMarcoLogico({titulo, descricao, nOE, meses}){
-  const og = `Fortalecer ${titulo.toLowerCase()}, ampliando capacidades locais e promovendo impactos socioambientais sustentáveis ao longo de ${meses} meses.`;
+function tokenize(s){
+  return cleanText(s)
+    .toLowerCase()
+    .replace(/[^a-zà-ÿ0-9\s\-]/gi," ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
 
-  const oes = [];
-  for(let i=1;i<=nOE;i++){
-    oes.push({
-      titulo:`Aprimorar capacidades institucionais e comunitárias relacionadas ao eixo ${i}.`,
-      resultados:[
-        {
-          r:"Capacidades técnicas e organizacionais fortalecidas.",
-          ind:"Número de participantes envolvidos; nível de satisfação.",
-          meta:`≥ ${Math.round(1000/nOE)} pessoas capacitadas em ${meses} meses.`,
-          mv:"Listas de presença; relatórios técnicos."
-        },
-        {
-          r:"Iniciativas locais estruturadas e em funcionamento.",
-          ind:"Número de iniciativas apoiadas.",
-          meta:`≥ ${Math.round(10/nOE)} iniciativas estruturadas.`,
-          mv:"Planos de ação; registros fotográficos."
-        }
+function topKeywords(desc, lang, k=8){
+  const stop = (lang === "en") ? STOP_EN : STOP_PT;
+  const freq = new Map();
+  tokenize(desc).forEach(w=>{
+    if (w.length < 5) return;
+    if (stop.has(w)) return;
+    freq.set(w, (freq.get(w)||0)+1);
+  });
+  return [...freq.entries()]
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,k)
+    .map(x=>x[0]);
+}
+
+function pickFirstMatch(descLower, pairs){
+  for (const [pattern, value] of pairs){
+    if (pattern.test(descLower)) return value;
+  }
+  return null;
+}
+
+/* =========================
+   2) Inferências leves (tema, público, território)
+   ========================= */
+
+function inferTheme(desc){
+  const d = desc.toLowerCase();
+
+  // circular economy / reuse / textiles
+  if (/(economia\s*circular|circular\s*economy|reuso|reuse|upcycling|upcycle|reciclag|recycling|reparo|repair|segunda\s*mão|thrift|resíduos|waste|têxtil|textile)/i.test(d)){
+    return "circular";
+  }
+  // education / schools / youth
+  if (/(escola|schools?|educaç|education|professor|teacher|aluno|student|adolesc|youth|currículo|curriculum|oficina|workshop)/i.test(d)){
+    return "education";
+  }
+  // agriculture / gardens / compost / irrigation
+  if (/(horta|garden|agro|agricult|farm|compost|composteira|irrig|soil|solo|mudas|seedlings)/i.test(d)){
+    return "agri";
+  }
+  // health / public health
+  if (/(saúde|health|nutri|nutrition|doença|disease|clínica|clinic|mental)/i.test(d)){
+    return "health";
+  }
+  // culture / arts
+  if (/(cultura|cultural|arte|art|música|music|teatro|festival|patrimônio|heritage|carnaval|carnival)/i.test(d)){
+    return "culture";
+  }
+  // general climate/adaptation
+  if (/(adaptaç|adaptation|resili|resilien|clima|climate|risco|risk|desastre|disaster|inunda|flood|seca|drought)/i.test(d)){
+    return "climate";
+  }
+  return "general";
+}
+
+function inferBeneficiaries(desc, lang){
+  const d = desc.toLowerCase();
+  const pt = (lang==="pt");
+  const pairs = pt ? [
+    [/(costureir|artesã|upcycling|reuso|brechó|têxtil)/i, "mulheres costureiras e artesãs"],
+    [/(adolesc|juventud|jovens)/i, "adolescentes e jovens"],
+    [/(crianç|infânc|alunos?\s+do\s+ensino)/i, "crianças e estudantes"],
+    [/(agricult|agroecol|horta|rural|comunidade\s+rural)/i, "agricultores e famílias rurais"],
+    [/(catador|recicl|coleta)/i, "trabalhadores de reciclagem e coletivos locais"]
+  ] : [
+    [/(seamstress|artisan|upcycling|reuse|textile|thrift)/i, "women seamstresses and artisans"],
+    [/(adolesc|youth|young people)/i, "adolescents and young people"],
+    [/(children|kids|students|schools?)/i, "children and students"],
+    [/(farm|farmer|agroecol|garden|rural)/i, "farmers and rural families"],
+    [/(waste picker|recycl|collection)/i, "recycling workers and local collectives"]
+  ];
+  return pickFirstMatch(d, pairs) || (pt ? "participantes locais e organizações comunitárias" : "local participants and community based organisations");
+}
+
+function inferTerritories(desc, lang){
+  const raw = desc || "";
+  // captura nomes comuns que o usuário usa com frequência
+  const hits = [];
+  const candidates = ["Salvador","Marajó","Maré","Manguinhos","Campo Grande","Lisboa","Barcelona","Bahia","Pernambuco","Ceará","São Paulo","Rio de Janeiro","Niterói"];
+  candidates.forEach(c=>{
+    const re = new RegExp("\\b"+c.replace(" ","\\s+")+"\\b","i");
+    if (re.test(raw)) hits.push(c);
+  });
+  if (hits.length >= 2) return (lang==="pt") ? `em ${hits.slice(0,3).join(", ")}` : `in ${hits.slice(0,3).join(", ")}`;
+  if (hits.length === 1) return (lang==="pt") ? `em ${hits[0]}` : `in ${hits[0]}`;
+  return (lang==="pt") ? "em territórios selecionados" : "in selected territories";
+}
+
+/* =========================
+   3) Biblioteca de textos (variáveis por tema)
+   Gera conteúdo "pronto" e distinto, usando keywords do input.
+   ========================= */
+
+function buildNarrative(desc, title, months, lang){
+  const theme = inferTheme(desc);
+  const beneficiaries = inferBeneficiaries(desc, lang);
+  const territories = inferTerritories(desc, lang);
+  const kws = topKeywords(desc, lang, 10);
+  const kwStr = kws.slice(0,4).join(", ");
+
+  const pt = (lang==="pt");
+
+  // Objetivo Geral por tema, com encaixe dos keywords
+  const OG = (()=>{
+    if (theme === "circular"){
+      return pt
+        ? `Fortalecer cadeias locais de economia circular no Brasil, integrando geração de renda, redução de resíduos e melhoria de processos, por meio da qualificação de iniciativas de reuso, reparo e upcycling ${territories}, consolidando práticas replicáveis ao longo de ${months} meses.`
+        : `Strengthen local circular economy value chains in Brazil by combining income generation, waste reduction and operational improvements, through strengthened reuse, repair and upcycling initiatives ${territories}, consolidating replicable practices over ${months} months.`;
+    }
+    if (theme === "education"){
+      return pt
+        ? `Aprimorar resultados educacionais e capacidades locais ${territories}, fortalecendo práticas pedagógicas e projetos aplicados ligados a ${kwStr || "desenvolvimento local"}, com foco em melhoria de aprendizagem, participação e trajetórias de estudantes ao longo de ${months} meses.`
+        : `Improve educational outcomes and local capacities ${territories} by strengthening pedagogical practices and applied projects related to ${kwStr || "local development"}, focusing on learning gains, participation and student pathways over ${months} months.`;
+    }
+    if (theme === "agri"){
+      return pt
+        ? `Fortalecer sistemas locais de produção e aprendizado prático ${territories}, integrando soluções de base comunitária para ${kwStr || "produção sustentável"}, com ganhos de eficiência, resiliência e segurança alimentar ao longo de ${months} meses.`
+        : `Strengthen local production and hands on learning systems ${territories} by integrating community based solutions for ${kwStr || "sustainable production"}, improving efficiency, resilience and food security over ${months} months.`;
+    }
+    if (theme === "culture"){
+      return pt
+        ? `Fortalecer capacidades locais e sustentabilidade de iniciativas culturais ${territories}, estruturando criação, circulação e formação vinculadas a ${kwStr || "cultura e território"}, ampliando acesso, renda e impacto sociocultural ao longo de ${months} meses.`
+        : `Strengthen local capacities and sustainability of cultural initiatives ${territories} by structuring creation, circulation and training linked to ${kwStr || "culture and place"}, expanding access, income and socio cultural impact over ${months} months.`;
+    }
+    if (theme === "health"){
+      return pt
+        ? `Ampliar capacidades locais e melhorar resultados em saúde ${territories}, por meio de intervenções aplicadas e fortalecimento institucional relacionados a ${kwStr || "promoção da saúde"}, aumentando acesso, qualidade e continuidade do cuidado ao longo de ${months} meses.`
+        : `Expand local capacities and improve health outcomes ${territories} through applied interventions and institutional strengthening related to ${kwStr || "health promotion"}, increasing access, quality and continuity of care over ${months} months.`;
+    }
+    if (theme === "climate"){
+      return pt
+        ? `Aumentar a resiliência climática e a capacidade de adaptação ${territories}, combinando ações práticas, governança local e aprendizado aplicado sobre ${kwStr || "riscos climáticos"}, com resultados mensuráveis ao longo de ${months} meses.`
+        : `Increase climate resilience and adaptive capacity ${territories} by combining practical action, local governance and applied learning on ${kwStr || "climate risks"}, delivering measurable results over ${months} months.`;
+    }
+    return pt
+      ? `Fortalecer capacidades locais ${territories} por meio de um conjunto integrado de ações, governança e aprendizagem aplicada relacionada a ${kwStr || "prioridades locais"}, gerando resultados verificáveis ao longo de ${months} meses.`
+      : `Strengthen local capacities ${territories} through an integrated set of actions, governance and applied learning related to ${kwStr || "local priorities"}, delivering verifiable results over ${months} months.`;
+  })();
+
+  // Estratégia para gerar objetivos específicos distintos
+  const SO = [];
+  const R = []; // results per SO, each has 2 results
+  const I = []; // indicators per result
+  const T = []; // targets per result
+  const V = []; // MoV per result
+
+  // Escalas simples para metas
+  const m = Number(months) || 36;
+  const scalePeople = Math.max(60, Math.round((m/36) * 180));   // base 180/36 meses
+  const scaleOrgs = Math.max(2, Math.round((m/36) * 4));        // base 4 grupos/36 meses
+  const scaleOutputs = Math.max(3, Math.round((m/36) * 6));     // base 6 produtos/36 meses
+  const scaleEvents = Math.max(2, Math.round((m/36) * 4));      // base 4 eventos/36 meses
+
+  function pushSO(obj){
+    SO.push(obj.so);
+    R.push(obj.results);
+    I.push(obj.indicators);
+    T.push(obj.targets);
+    V.push(obj.mov);
+  }
+
+  // Tema circular, alinhado ao que você quer como exemplo, mas o motor vale para qualquer tema
+  if (theme === "circular"){
+    pushSO({
+      so: pt
+        ? `Qualificar técnica, organizacional e produtivamente ${beneficiaries}, estruturando rotinas de produção, padrões de qualidade e canais de comercialização para aumentar renda e previsibilidade econômica.`
+        : `Strengthen the technical, organisational and production capacities of ${beneficiaries}, structuring workflows, quality standards and market channels to increase income and economic predictability.`,
+      results: [
+        pt
+          ? `Grupos produtivos capacitados e operando com domínio de técnicas de upcycling, reuso e reparo, com portfólio de produtos valorizado e consistente.`
+          : `Production groups trained and operating with strong upcycling, reuse and repair skills, with a consistent and higher value product portfolio.`,
+        pt
+          ? `Arranjos produtivos organizados e conectados à operação do reuso, com divisão de funções, controle de qualidade e planejamento de produção em ciclos.`
+          : `Production arrangements organised and connected to reuse operations, with role allocation, quality control and production planning in cycles.`
+      ],
+      indicators: [
+        pt ? `Número de participantes capacitados e percentual que aplica as técnicas no ciclo produtivo.` :
+             `Number of participants trained and share applying skills in production cycles.`,
+        pt ? `Número de grupos estruturados e percentual que mantém produção regular por pelo menos 6 meses.` :
+             `Number of groups structured and share maintaining regular production for at least 6 months.`
+      ],
+      targets: [
+        pt ? `≥ ${scalePeople} pessoas capacitadas; ≥ 70% aplicando técnicas em produção.` :
+             `≥ ${scalePeople} people trained; ≥ 70% applying skills in production.`,
+        pt ? `≥ ${scaleOrgs} grupos estruturados; ≥ 60% com produção regular por 6 meses.` :
+             `≥ ${scaleOrgs} groups structured; ≥ 60% with regular production for 6 months.`
+      ],
+      mov: [
+        pt ? `Listas de presença; fichas de acompanhamento; registros fotográficos; avaliação de aprendizagem.` :
+             `Attendance lists; tracking forms; photo records; learning assessments.`,
+        pt ? `Planos de produção; checklists de qualidade; relatórios de mentoria; registros de venda.` :
+             `Production plans; quality checklists; mentoring reports; sales records.`
       ]
     });
-  }
-  return {og, oes};
-}
 
-function renderTabela(ml){
-  const tbl=document.getElementById("tbl");
-  tbl.innerHTML="";
-
-  tbl.innerHTML+=`
-    <tr>
-      <td class="col-obj">Objetivo Geral</td>
-      <td colspan="4">${ml.og}</td>
-    </tr>
-  `;
-
-  ml.oes.forEach((oe,idx)=>{
-    tbl.innerHTML+=`
-      <tr>
-        <td class="col-obj">Objetivo Específico ${idx+1}</td>
-        <td colspan="4"><em>${oe.titulo}</em></td>
-      </tr>
-      <tr>
-        <th></th>
-        <th>Resultados</th>
-        <th>Indicadores</th>
-        <th>Meta</th>
-        <th>Meios de Verificação</th>
-      </tr>
-    `;
-    oe.resultados.forEach(r=>{
-      tbl.innerHTML+=`
-        <tr>
-          <td></td>
-          <td>${r.r}</td>
-          <td>${r.ind}</td>
-          <td>${r.meta}</td>
-          <td>${r.mv}</td>
-        </tr>
-      `;
+    pushSO({
+      so: pt
+        ? `Aprimorar a eficiência, a sustentabilidade ambiental e a viabilidade econômica das operações de reuso, por meio de pesquisa aplicada na cadeia de valor, incluindo coleta, triagem, design, produção, logística e precificação.`
+        : `Improve the operational efficiency, environmental performance and financial viability of reuse operations through applied research across the value chain, including collection, sorting, design, production, logistics and pricing.`,
+      results: [
+        pt
+          ? `Diagnóstico operacional da cadeia de valor concluído, com identificação de gargalos, custos críticos, perdas materiais e oportunidades de melhoria com base em evidências.`
+          : `Operational value chain diagnosis completed, identifying bottlenecks, critical costs, material losses and evidence based improvement opportunities.`,
+        pt
+          ? `Pilotos implementados com melhorias em processos, resultando em redução de perdas, aumento de produtividade e melhora de margem em linhas de produtos selecionadas.`
+          : `Pilots implemented with process improvements, reducing losses, increasing productivity and improving margins for selected product lines.`
+      ],
+      indicators: [
+        pt ? `Entrega de diagnóstico com mapa de processos, custos e pontos de perda, validado com a equipe.` :
+             `Delivery of a process, cost and loss map validated with the team.`,
+        pt ? `Percentual de redução de perdas/custos e variação de margem em produtos piloto.` :
+             `Percentage reduction in losses/costs and margin change in pilot products.`
+      ],
+      targets: [
+        pt ? `≥ 1 diagnóstico completo validado; ≥ 8 recomendações priorizadas com plano de implementação.` :
+             `≥ 1 validated full diagnosis; ≥ 8 prioritised recommendations with implementation plan.`,
+        pt ? `≥ 15% de redução média de perdas/custos nos pilotos; ≥ 10% de aumento de margem em produtos selecionados.` :
+             `≥ 15% average loss/cost reduction in pilots; ≥ 10% margin increase in selected products.`
+      ],
+      mov: [
+        pt ? `Relatório técnico; planilhas de custos; atas de validação; evidências de linha de base.` :
+             `Technical report; cost spreadsheets; validation notes; baseline evidence.`,
+        pt ? `Relatórios operacionais; registros financeiros; fichas de produção; evidências fotográficas.` :
+             `Operational reports; financial records; production logs; photo evidence.`
+      ]
     });
-  });
+
+    pushSO({
+      so: pt
+        ? `Sistematizar e disseminar metodologias e recomendações práticas para replicação e escala, produzindo materiais técnicos e espaços de intercâmbio com organizações, redes e gestores públicos.`
+        : `Systematise and disseminate practical methodologies and recommendations for replication and scaling, producing technical materials and exchange spaces with organisations, networks and public stakeholders.`,
+      results: [
+        pt
+          ? `Pacote de conhecimento produzido, incluindo guias operacionais, estudos de caso e recomendações para melhorar desempenho econômico e socioambiental de operações de reuso.`
+          : `Knowledge package produced, including operational guides, case studies and recommendations to improve the economic and socio environmental performance of reuse operations.`,
+        pt
+          ? `Estratégia de disseminação executada com oficinas, eventos e devolutivas, ampliando adoção de práticas e fortalecendo articulação institucional para escala.`
+          : `Dissemination strategy implemented through workshops, events and feedback sessions, increasing practice adoption and strengthening institutional articulation for scale.`
+      ],
+      indicators: [
+        pt ? `Número de produtos de conhecimento publicados e utilizados por atores externos.` :
+             `Number of knowledge products published and used by external actors.`,
+        pt ? `Número de eventos realizados e alcance de participantes e instituições.` :
+             `Number of events delivered and reach of participants and institutions.`
+      ],
+      targets: [
+        pt ? `≥ ${scaleOutputs} produtos (guias, notas técnicas, estudos de caso); ≥ 2 formatos acessíveis (PDF e slides).` :
+             `≥ ${scaleOutputs} products (guides, briefs, case studies); ≥ 2 accessible formats (PDF and slides).`,
+        pt ? `≥ ${scaleEvents} eventos de disseminação; ≥ 120 pessoas ou instituições alcançadas.` :
+             `≥ ${scaleEvents} dissemination events; ≥ 120 people or institutions reached.`
+      ],
+      mov: [
+        pt ? `Publicações; links; versões finais; registros de revisão técnica.` :
+             `Publications; links; final versions; technical review records.`,
+        pt ? `Listas de presença; agendas; relatórios de evento; métricas de divulgação.` :
+             `Attendance lists; agendas; event reports; outreach metrics.`
+      ]
+    });
+
+  } else {
+    // Modo multi-temas: cria 3 objetivos distintos e coerentes com o tema inferido,
+    // sempre com textos completos e não repetidos.
+    const themeBlocks = buildThemeBlocks(theme, desc, title, months, lang, beneficiaries, territories, kws, {
+      scalePeople, scaleOrgs, scaleOutputs, scaleEvents
+    });
+
+    themeBlocks.forEach(b => pushSO(b));
+  }
+
+  // Ajusta quantidade de objetivos conforme input do usuário
+  const n = Math.max(1, Math.min(6, Number(document.getElementById("nObjectives").value) || 3));
+  while (SO.length > n){
+    SO.pop(); R.pop(); I.pop(); T.pop(); V.pop();
+  }
+  while (SO.length < n){
+    // Se pedirem mais do que temos, criamos objetivos adicionais com base em lacunas:
+    // governança, monitoramento e sustentabilidade financeira.
+    const idx = SO.length + 1;
+    pushSO(buildExtraObjective(idx, desc, months, lang, beneficiaries, territories, kws, {scalePeople, scaleOrgs, scaleOutputs, scaleEvents}));
+  }
+
+  return { theme, OG, SO, R, I, T, V };
 }
 
-document.getElementById("frm").addEventListener("submit",e=>{
+function buildThemeBlocks(theme, desc, title, months, lang, beneficiaries, territories, kws, scales){
+  const pt = (lang==="pt");
+  const kwA = kws[0] || (pt ? "prioridades locais" : "local priorities");
+  const kwB = kws[1] || (pt ? "implementação" : "implementation");
+  const kwC = kws[2] || (pt ? "governança" : "governance");
+
+  if (theme === "education"){
+    return [
+      {
+        so: pt
+          ? `Melhorar práticas pedagógicas e experiências de aprendizagem ${territories}, fortalecendo professores e facilitadores para desenvolver atividades aplicadas relacionadas a ${kwA}, com acompanhamento de progresso e apoio continuado.`
+          : `Improve pedagogical practices and learning experiences ${territories} by strengthening teachers and facilitators to deliver applied activities related to ${kwA}, with progress tracking and ongoing support.`,
+        results: [
+          pt
+            ? `Educadores formados e aplicando sequências didáticas e projetos práticos, com aumento de participação e engajamento de estudantes.`
+            : `Educators trained and applying lesson sequences and practical projects, increasing student participation and engagement.`,
+          pt
+            ? `Rotina de acompanhamento implantada, com instrumentos simples para medir evolução de aprendizagem, participação e permanência.`
+            : `Monitoring routine in place with simple tools to track learning progress, participation and retention.`
+        ],
+        indicators: [
+          pt ? `Número de educadores capacitados e percentual que aplica as práticas em sala/atividade.` :
+               `Number of educators trained and share applying practices in classroom/activities.`,
+          pt ? `Existência e uso regular de instrumentos de monitoramento e devolutivas trimestrais.` :
+               `Existence and regular use of monitoring tools and quarterly feedback.`
+        ],
+        targets: [
+          pt ? `≥ ${Math.round(scales.scalePeople * 0.6)} educadores; ≥ 70% aplicando práticas no trimestre seguinte.` :
+               `≥ ${Math.round(scales.scalePeople * 0.6)} educators; ≥ 70% applying practices in the following term.`,
+          pt ? `≥ 1 kit de monitoramento adotado; ≥ 4 ciclos de devolutiva ao longo do projeto.` :
+               `≥ 1 monitoring toolkit adopted; ≥ 4 feedback cycles during the project.`
+        ],
+        mov: [
+          pt ? `Listas de presença; planos de aula; registros de aplicação; avaliação pós-formação.` :
+               `Attendance lists; lesson plans; implementation records; post-training evaluations.`,
+          pt ? `Planilhas de acompanhamento; relatórios trimestrais; amostras de trabalhos; entrevistas.` :
+               `Tracking sheets; quarterly reports; samples of student work; interviews.`
+        ]
+      },
+      {
+        so: pt
+          ? `Estruturar projetos aplicados e parcerias locais para transformar aprendizagens em entregas concretas ligadas a ${kwB}, incluindo produção de materiais, ações comunitárias ou protótipos.`
+          : `Structure applied projects and local partnerships to turn learning into concrete outputs related to ${kwB}, including materials, community actions or prototypes.`,
+        results: [
+          pt
+            ? `Portfólio de projetos aplicado implementado, com entregas verificáveis e participação ativa de estudantes e parceiros locais.`
+            : `Applied project portfolio implemented with verifiable outputs and active participation of students and local partners.`,
+          pt
+            ? `Rede de apoio local formalizada, com papeis definidos, calendário de ações e compromisso de continuidade pós-projeto.`
+            : `Local support network formalised with defined roles, action calendar and post-project continuity commitments.`
+        ],
+        indicators: [
+          pt ? `Número de projetos implementados e entregas produzidas.` : `Number of projects implemented and outputs produced.`,
+          pt ? `Número de parcerias ativas e acordos/termos registrados.` : `Number of active partnerships and documented agreements.`
+        ],
+        targets: [
+          pt ? `≥ ${Math.max(3, Math.round((months/36)*6))} projetos implementados; ≥ 12 entregas concluídas.` :
+               `≥ ${Math.max(3, Math.round((months/36)*6))} projects implemented; ≥ 12 outputs completed.`,
+          pt ? `≥ ${Math.max(3, Math.round((months/36)*5))} parcerias ativas; ≥ 1 plano de continuidade por território.` :
+               `≥ ${Math.max(3, Math.round((months/36)*5))} active partnerships; ≥ 1 continuity plan per territory.`
+        ],
+        mov: [
+          pt ? `Relatórios de projeto; fotos; links; amostras de materiais; depoimentos.` :
+               `Project reports; photos; links; sample materials; testimonials.`,
+          pt ? `Termos de parceria; atas; agendas; listas de presença; comunicações oficiais.` :
+               `Partnership agreements; minutes; agendas; attendance lists; official communications.`
+        ]
+      },
+      {
+        so: pt
+          ? `Consolidar um modelo de gestão, governança e aprendizagem do projeto, garantindo qualidade, inclusão e uso de evidências para ajustes, com ênfase em transparência e accountability.`
+          : `Consolidate a project management, governance and learning model ensuring quality, inclusion and evidence-based adaptation, with emphasis on transparency and accountability.`,
+        results: [
+          pt ? `Sistema de gestão e governança implantado com ritos de decisão, critérios de qualidade e mecanismos de participação.` :
+               `Management and governance system in place with decision routines, quality criteria and participation mechanisms.`,
+          pt ? `Produtos de conhecimento sistematizados e disseminados, com recomendações aplicáveis para replicação e escala.` :
+               `Knowledge products systematised and disseminated with actionable recommendations for replication and scaling.`
+        ],
+        indicators: [
+          pt ? `Realização de reuniões de governança e registro de decisões e riscos.` :
+               `Governance meetings held and decisions/risk logs maintained.`,
+          pt ? `Número de materiais de sistematização e alcance de disseminação.` :
+               `Number of systematisation materials and dissemination reach.`
+        ],
+        targets: [
+          pt ? `≥ 12 reuniões registradas; ≥ 1 matriz de riscos atualizada trimestralmente.` :
+               `≥ 12 documented meetings; ≥ 1 risk matrix updated quarterly.`,
+          pt ? `≥ ${scales.scaleOutputs} produtos; ≥ ${scales.scaleEvents} ações de disseminação.` :
+               `≥ ${scales.scaleOutputs} products; ≥ ${scales.scaleEvents} dissemination actions.`
+        ],
+        mov: [
+          pt ? `Atas; matriz de riscos; planos de ação; relatórios semestrais.` :
+               `Minutes; risk matrix; action plans; semiannual reports.`,
+          pt ? `Publicações; apresentações; registros de evento; métricas de acesso.` :
+               `Publications; presentations; event records; access metrics.`
+        ]
+      }
+    ];
+  }
+
+  if (theme === "agri"){
+    return [
+      {
+        so: pt
+          ? `Aprimorar capacidades técnicas e operacionais de atores locais ${territories} para implementar soluções de produção sustentável e gestão de recursos ligados a ${kwA}, com rotinas de manutenção e uso pedagógico quando aplicável.`
+          : `Strengthen technical and operational capacities of local actors ${territories} to implement sustainable production and resource management solutions related to ${kwA}, with maintenance routines and educational use where applicable.`,
+        results: [
+          pt ? `Sistemas e práticas implementados e operacionais, com manutenção definida e responsáveis capacitados.` :
+               `Systems and practices implemented and operational, with defined maintenance and trained responsible actors.`,
+          pt ? `Produção e uso local fortalecidos, com evidências de melhoria de eficiência e redução de perdas.` :
+               `Local production and use strengthened, with evidence of improved efficiency and reduced losses.`
+        ],
+        indicators: [
+          pt ? `Número de participantes capacitados e número de unidades/sistemas implantados.` :
+               `Number of participants trained and number of units/systems implemented.`,
+          pt ? `Variação de produtividade, redução de perdas e regularidade de manutenção.` :
+               `Change in productivity, loss reduction and maintenance regularity.`
+        ],
+        targets: [
+          pt ? `≥ ${Math.round(scales.scalePeople * 0.5)} pessoas capacitadas; ≥ ${Math.max(2, Math.round((months/36)*6))} unidades implantadas.` :
+               `≥ ${Math.round(scales.scalePeople * 0.5)} people trained; ≥ ${Math.max(2, Math.round((months/36)*6))} units implemented.`,
+          pt ? `≥ 15% de melhoria em indicadores locais; ≥ 80% de manutenção em dia.` :
+               `≥ 15% improvement in local indicators; ≥ 80% on-time maintenance.`
+        ],
+        mov: [
+          pt ? `Listas de presença; relatórios; checklists; fotos; registros de instalação.` :
+               `Attendance lists; reports; checklists; photos; installation records.`,
+          pt ? `Planilhas de produção; diários de campo; medições; entrevistas.` :
+               `Production sheets; field logs; measurements; interviews.`
+        ]
+      },
+      {
+        so: pt
+          ? `Fortalecer organização comunitária e arranjos de governança para gerir recursos, insumos e decisões do projeto, reduzindo dependência externa e aumentando continuidade.`
+          : `Strengthen community organisation and governance arrangements to manage resources, inputs and project decisions, reducing external dependency and increasing continuity.`,
+        results: [
+          pt ? `Comitês e regras operacionais estabelecidos, com calendário de reuniões, responsabilidades e mecanismos de transparência.` :
+               `Committees and operating rules established with meeting calendar, responsibilities and transparency mechanisms.`,
+          pt ? `Acordos locais para acesso e uso implementados, com resolução de conflitos e pactuação com stakeholders.` :
+               `Local access and use agreements implemented with conflict resolution and stakeholder alignment.`
+        ],
+        indicators: [
+          pt ? `Número de reuniões realizadas e decisões registradas.` : `Number of meetings held and decisions recorded.`,
+          pt ? `Número de acordos e nível de adesão por parte de atores locais.` : `Number of agreements and level of adherence by local actors.`
+        ],
+        targets: [
+          pt ? `≥ 12 reuniões registradas; ≥ 1 plano anual de gestão local.` :
+               `≥ 12 documented meetings; ≥ 1 annual local management plan.`,
+          pt ? `≥ ${Math.max(2, Math.round((months/36)*4))} acordos formais; ≥ 70% adesão reportada.` :
+               `≥ ${Math.max(2, Math.round((months/36)*4))} formal agreements; ≥ 70% reported adherence.`
+        ],
+        mov: [
+          pt ? `Atas; planos; listas; regimentos; registros de comunicação.` :
+               `Minutes; plans; lists; internal rules; communication records.`,
+          pt ? `Termos assinados; registros de mediação; evidências fotográficas.` :
+               `Signed terms; mediation records; photo evidence.`
+        ]
+      },
+      {
+        so: pt
+          ? `Sistematizar evidências e recomendações práticas para replicação e escala, conectando resultados locais a agendas institucionais e oportunidades de financiamento.`
+          : `Systematise evidence and practical recommendations for replication and scaling, connecting local results to institutional agendas and funding opportunities.`,
+        results: [
+          pt ? `Estudos de caso e guias operacionais produzidos, com indicadores, custos e lições aprendidas.` :
+               `Case studies and operational guides produced with indicators, costs and lessons learned.`,
+          pt ? `Disseminação realizada com eventos e materiais, estimulando adoção por redes e parceiros institucionais.` :
+               `Dissemination carried out through events and materials, encouraging adoption by networks and institutional partners.`
+        ],
+        indicators: [
+          pt ? `Número de produtos de conhecimento e qualidade técnica revisada.` : `Number of knowledge products and technical review quality.`,
+          pt ? `Alcance de disseminação e número de novos interessados em replicar.` : `Dissemination reach and number of new replication interests.`
+        ],
+        targets: [
+          pt ? `≥ ${scales.scaleOutputs} produtos; ≥ 1 nota técnica com custos e modelo de operação.` :
+               `≥ ${scales.scaleOutputs} products; ≥ 1 technical note with costs and operating model.`,
+          pt ? `≥ ${scales.scaleEvents} eventos; ≥ 10 novos contatos institucionais para replicação.` :
+               `≥ ${scales.scaleEvents} events; ≥ 10 new institutional contacts for replication.`
+        ],
+        mov: [
+          pt ? `Publicações; revisão por pares; versões finais; anexos técnicos.` :
+               `Publications; peer review; final versions; technical annexes.`,
+          pt ? `Relatórios de evento; listas; links; métricas; atas de reuniões.` :
+               `Event reports; lists; links; metrics; meeting notes.`
+        ]
+      }
+    ];
+  }
+
+  // fallback multi-temas geral/clima/saúde/cultura
+  return [
+    {
+      so: pt
+        ? `Fortalecer capacidades técnicas e institucionais dos atores diretamente envolvidos ${territories}, qualificando implementação, rotinas e padrões de qualidade para entregar resultados consistentes em ${kwA}.`
+        : `Strengthen technical and institutional capacities of directly involved actors ${territories}, improving implementation routines and quality standards to deliver consistent results in ${kwA}.`,
+      results: [
+        pt ? `Equipe e parceiros capacitados com ferramentas práticas e protocolos operacionais adaptados ao contexto local.` :
+             `Team and partners trained with practical tools and operational protocols adapted to local context.`,
+        pt ? `Serviços, atividades ou intervenções operando com qualidade e regularidade, com mecanismos de feedback de usuários.` :
+             `Services, activities or interventions operating regularly with quality and user feedback mechanisms.`
+      ],
+      indicators: [
+        pt ? `Número de pessoas capacitadas e taxa de aplicação dos protocolos.` : `Number of people trained and protocol adoption rate.`,
+        pt ? `Regularidade de execução e satisfação de participantes/usuários.` : `Delivery regularity and participant/user satisfaction.`
+      ],
+      targets: [
+        pt ? `≥ ${Math.round(scales.scalePeople * 0.6)} pessoas; ≥ 70% aplicando protocolos.` :
+             `≥ ${Math.round(scales.scalePeople * 0.6)} people; ≥ 70% applying protocols.`,
+        pt ? `≥ 75% satisfação; ≥ 1 ciclo de feedback a cada 6 meses.` :
+             `≥ 75% satisfaction; ≥ 1 feedback cycle every 6 months.`
+      ],
+      mov: [
+        pt ? `Listas de presença; relatórios; protocolos; registros fotográficos.` :
+             `Attendance lists; reports; protocols; photo records.`,
+        pt ? `Pesquisas; entrevistas; logs de execução; registros de atendimento.` :
+             `Surveys; interviews; delivery logs; service records.`
+      ]
+    },
+    {
+      so: pt
+        ? `Implementar e testar melhorias e soluções práticas relacionadas a ${kwB}, com pilotos, ajustes iterativos e documentação de custos e resultados para tomada de decisão.`
+        : `Implement and test practical improvements related to ${kwB} through pilots, iterative adjustments and documentation of costs and results for decision-making.`,
+      results: [
+        pt ? `Linha de base e diagnóstico concluídos, com hipóteses de melhoria priorizadas e plano de pilotos definido.` :
+             `Baseline and diagnosis completed with prioritised improvement hypotheses and a defined pilot plan.`,
+        pt ? `Pilotos executados e avaliados, com evidências de efetividade, custo-eficiência e critérios claros para escala.` :
+             `Pilots executed and evaluated with evidence of effectiveness, cost efficiency and clear criteria for scaling.`
+      ],
+      indicators: [
+        pt ? `Entrega de diagnóstico e número de hipóteses priorizadas.` : `Diagnosis delivered and number of prioritised hypotheses.`,
+        pt ? `Número de pilotos e proporção que atingiu critérios mínimos de desempenho.` :
+             `Number of pilots and share meeting minimum performance criteria.`
+      ],
+      targets: [
+        pt ? `≥ 1 diagnóstico; ≥ 6 hipóteses priorizadas com plano de teste.` :
+             `≥ 1 diagnosis; ≥ 6 prioritised hypotheses with test plan.`,
+        pt ? `≥ 3 pilotos; ≥ 2 com evidência suficiente para escala.` :
+             `≥ 3 pilots; ≥ 2 with sufficient evidence for scale.`
+      ],
+      mov: [
+        pt ? `Relatório técnico; base de dados; atas; cronograma de pilotos.` :
+             `Technical report; dataset; meeting notes; pilot schedule.`,
+        pt ? `Relatórios de piloto; planilhas; evidências fotográficas; entrevistas.` :
+             `Pilot reports; spreadsheets; photo evidence; interviews.`
+      ]
+    },
+    {
+      so: pt
+        ? `Produzir e disseminar conhecimento aplicado e recomendações operacionais para replicação e articulação institucional, fortalecendo governança e sustentabilidade pós-projeto.`
+        : `Produce and disseminate applied knowledge and operational recommendations for replication and institutional articulation, strengthening governance and post-project sustainability.`,
+      results: [
+        pt ? `Produtos de conhecimento desenvolvidos com recomendações práticas, custos e requisitos de implementação.` :
+             `Knowledge products developed with practical recommendations, costs and implementation requirements.`,
+        pt ? `Estratégia de disseminação executada com eventos e devolutivas, gerando adesão e interesse de novos parceiros.` :
+             `Dissemination strategy implemented with events and feedback, generating uptake and interest from new partners.`
+      ],
+      indicators: [
+        pt ? `Número de produtos publicados e revisados tecnicamente.` : `Number of products published and technically reviewed.`,
+        pt ? `Número de eventos e contatos institucionais ativados para replicação.` :
+             `Number of events and institutional contacts activated for replication.`
+      ],
+      targets: [
+        pt ? `≥ ${scales.scaleOutputs} produtos; ≥ 1 guia operacional completo.` :
+             `≥ ${scales.scaleOutputs} products; ≥ 1 complete operational guide.`,
+        pt ? `≥ ${scales.scaleEvents} eventos; ≥ 10 contatos institucionais qualificados.` :
+             `≥ ${scales.scaleEvents} events; ≥ 10 qualified institutional contacts.`
+      ],
+      mov: [
+        pt ? `Publicações; versões finais; revisão; anexos técnicos.` :
+             `Publications; final versions; reviews; technical annexes.`,
+        pt ? `Relatórios de evento; listas; comunicações; métricas.` :
+             `Event reports; lists; communications; metrics.`
+      ]
+    }
+  ];
+}
+
+function buildExtraObjective(idx, desc, months, lang, beneficiaries, territories, kws, scales){
+  const pt = (lang==="pt");
+  const kwA = kws[0] || (pt ? "gestão e execução" : "delivery and management");
+  const kwB = kws[1] || (pt ? "monitoramento" : "monitoring");
+  const people = Math.max(40, Math.round(scales.scalePeople * 0.4));
+
+  return {
+    so: pt
+      ? `Consolidar mecanismos de gestão, monitoramento e sustentabilidade do projeto, garantindo execução consistente, uso de evidências e continuidade das ações relacionadas a ${kwA}.`
+      : `Consolidate project management, monitoring and sustainability mechanisms, ensuring consistent delivery, evidence use and continuity of actions related to ${kwA}.`,
+    results: [
+      pt
+        ? `Sistema de monitoramento operacional implantado, com indicadores, rotinas de coleta e revisões periódicas para ajustes de rota.`
+        : `Operational monitoring system in place with indicators, data routines and periodic reviews for course correction.`,
+      pt
+        ? `Plano de sustentabilidade definido com governança, fontes de receita/apoio e responsabilidades claras após o encerramento do financiamento.`
+        : `Sustainability plan defined with governance, revenue/support sources and clear responsibilities after funding ends.`
+    ],
+    indicators: [
+      pt ? `Percentual de indicadores com dados atualizados e revisões realizadas.` :
+           `Share of indicators with updated data and reviews completed.`,
+      pt ? `Existência de plano de sustentabilidade e número de atores comprometidos formalmente.` :
+           `Existence of sustainability plan and number of formally committed actors.`
+    ],
+    targets: [
+      pt ? `≥ 80% dos indicadores atualizados; ≥ 6 revisões ao longo do projeto.` :
+           `≥ 80% of indicators updated; ≥ 6 reviews during the project.`,
+      pt ? `≥ 1 plano de sustentabilidade; ≥ ${Math.max(3, Math.round((months/36)*5))} compromissos formais.` :
+           `≥ 1 sustainability plan; ≥ ${Math.max(3, Math.round((months/36)*5))} formal commitments.`
+    ],
+    mov: [
+      pt ? `Planilhas; relatórios; atas; dashboards; registros de revisão.` :
+           `Spreadsheets; reports; minutes; dashboards; review records.`,
+      pt ? `Plano assinado; cartas de intenção; termos; atas de reunião.` :
+           `Signed plan; letters of intent; agreements; meeting notes.`
+    ]
+  };
+}
+
+/* =========================
+   4) Construção da tabela no formato do seu preview
+   Objetivo Geral e 3 OEs, cada um com 2 resultados.
+   ========================= */
+
+function buildRowsForPreview(narr, lang){
+  const pt = (lang==="pt");
+
+  // Estrutura: uma linha para Objetivo Geral (2 colunas: label + texto)
+  // Depois, para cada OE:
+  // - linha do OE (label + texto)
+  // - linha de cabeçalho Resultados/Indicadores/Meta/Meios de Verificação (com colunas)
+  // - duas linhas (cada resultado)
+  const rows = [];
+
+  rows.push({
+    type: "og",
+    label: pt ? "Objetivo Geral" : "Overall Objective",
+    text: narr.OG
+  });
+
+  for (let i=0;i<narr.SO.length;i++){
+    rows.push({
+      type:"so",
+      label: pt ? `Objetivo Específico ${i+1}` : `Specific Objective ${i+1}`,
+      text: narr.SO[i]
+    });
+
+    rows.push({
+      type:"head",
+      cols: [
+        pt ? "Resultados" : "Results",
+        pt ? "Indicadores" : "Indicators",
+        pt ? "Meta" : "Target",
+        pt ? "Meios de Verificação" : "Means of Verification"
+      ]
+    });
+
+    for (let j=0;j<2;j++){
+      rows.push({
+        type:"item",
+        result: narr.R[i][j] || "",
+        indicator: narr.I[i][j] || "",
+        target: narr.T[i][j] || "",
+        mov: narr.V[i][j] || ""
+      });
+    }
+  }
+  return rows;
+}
+
+function renderPreviewTable(rows, lang){
+  const pt = (lang==="pt");
+
+  const table = document.createElement("table");
+
+  // Colunas do bloco de OE são 4, mas OG/SO usam 2 colunas.
+  // Para manter uma única tabela, vamos usar 5 colunas:
+  // Col 1 = rótulo (Objetivo Geral / OE1 etc)
+  // Col 2..5 = conteúdo (no caso de OG/SO, faremos colspan=4)
+  const colgroup = document.createElement("colgroup");
+  ["220px","auto","auto","auto","auto"].forEach(w=>{
+    const c = document.createElement("col");
+    c.style.width = w;
+    colgroup.appendChild(c);
+  });
+  table.appendChild(colgroup);
+
+  const tbody = document.createElement("tbody");
+
+  rows.forEach(r=>{
+    const tr = document.createElement("tr");
+
+    if (r.type === "og" || r.type === "so"){
+      const td1 = document.createElement("td");
+      td1.className = "section";
+      td1.textContent = r.label;
+
+      const td2 = document.createElement("td");
+      td2.colSpan = 4;
+      td2.textContent = r.text;
+
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    if (r.type === "head"){
+      const td0 = document.createElement("td");
+      td0.className = "subhead";
+      td0.textContent = ""; // coluna do label vazia nesse header
+
+      tr.appendChild(td0);
+
+      r.cols.forEach(c=>{
+        const td = document.createElement("td");
+        td.className = "subhead";
+        td.textContent = c;
+        tr.appendChild(td);
+      });
+
+      tbody.appendChild(tr);
+      return;
+    }
+
+    if (r.type === "item"){
+      const td0 = document.createElement("td");
+      td0.textContent = ""; // sem label nas linhas de resultados
+      tr.appendChild(td0);
+
+      const tdR = document.createElement("td");
+      tdR.textContent = r.result;
+
+      const tdI = document.createElement("td");
+      tdI.textContent = r.indicator;
+
+      const tdT = document.createElement("td");
+      tdT.textContent = r.target;
+
+      const tdV = document.createElement("td");
+      tdV.textContent = r.mov;
+
+      tr.appendChild(tdR);
+      tr.appendChild(tdI);
+      tr.appendChild(tdT);
+      tr.appendChild(tdV);
+
+      tbody.appendChild(tr);
+      return;
+    }
+  });
+
+  table.appendChild(tbody);
+  return table;
+}
+
+/* =========================
+   5) Export XLSX mantendo a mesma estrutura do preview
+   ========================= */
+
+function rowsToAOA(rows, lang){
+  const pt = (lang==="pt");
+  const aoa = [];
+
+  // 5 colunas: A label, B resultado/indicador/..., C, D, E
+  rows.forEach(r=>{
+    if (r.type === "og" || r.type === "so"){
+      aoa.push([r.label, r.text, "", "", ""]);
+      return;
+    }
+    if (r.type === "head"){
+      aoa.push(["", r.cols[0], r.cols[1], r.cols[2], r.cols[3]]);
+      return;
+    }
+    if (r.type === "item"){
+      aoa.push(["", r.result, r.indicator, r.target, r.mov]);
+      return;
+    }
+  });
+
+  return aoa;
+}
+
+function exportXLSX(rows, fileName, lang){
+  const aoa = rowsToAOA(rows, lang);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Ajustes de largura aproximados para legibilidade
+  ws["!cols"] = [
+    { wch: 22 },
+    { wch: 55 },
+    { wch: 46 },
+    { wch: 34 },
+    { wch: 40 }
+  ];
+
+  // Mesclas para OG/SO (colspan=4 no preview)
+  // Aqui: mesclar B..E nas linhas onde A tem label e B tem texto e C..E vazios
+  const merges = [];
+  for (let r=0;r<aoa.length;r++){
+    const A = aoa[r][0];
+    const B = aoa[r][1];
+    const C = aoa[r][2];
+    if (A && B && !C){
+      merges.push({ s: { r, c: 1 }, e: { r, c: 4 } });
+    }
+  }
+  ws["!merges"] = merges;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, pt ? "Marco Lógico" : "Logical Framework");
+  XLSX.writeFile(wb, fileName);
+}
+
+/* =========================
+   6) UI
+   ========================= */
+
+let lastRows = null;
+
+function showError(msg){
+  const el = document.getElementById("err");
+  el.style.display = "block";
+  el.textContent = msg;
+}
+function clearError(){
+  const el = document.getElementById("err");
+  el.style.display = "none";
+  el.textContent = "";
+}
+
+document.getElementById("btnGenerate").addEventListener("click", (e)=>{
   e.preventDefault();
+  clearError();
 
-  const data={
-    titulo:document.getElementById("titulo").value,
-    descricao:document.getElementById("descricao").value,
-    nOE:parseInt(document.getElementById("nOE").value),
-    meses:parseInt(document.getElementById("meses").value)
-  };
+  const title = cleanText(document.getElementById("title").value);
+  const desc  = cleanText(document.getElementById("desc").value);
+  const lang  = document.getElementById("lang").value;
+  const months = Number(document.getElementById("months").value) || 36;
 
-  const ml=gerarMarcoLogico(data);
-  renderTabela(ml);
+  if (!title || title.length < 6){
+    showError(lang==="pt" ? "Informe um título do projeto com pelo menos 6 caracteres." : "Please provide a project title (at least 6 characters).");
+    return;
+  }
+  if (!desc || desc.length < 60){
+    showError(lang==="pt"
+      ? "Cole uma descrição mais completa (mínimo 60 caracteres). Inclua público, local e o que será feito."
+      : "Please paste a more complete description (minimum 60 characters). Include target group, location and what will be done."
+    );
+    return;
+  }
 
-  document.getElementById("previewBox").style.display="block";
+  const narr = buildNarrative(desc, title, months, lang);
+  const rows = buildRowsForPreview(narr, lang);
 
-  document.getElementById("baixarXlsx").onclick=()=>{
-    const wb=XLSX.utils.book_new();
-    const ws=XLSX.utils.table_to_sheet(document.getElementById("tbl"));
-    XLSX.utils.book_append_sheet(wb,ws,"Marco Lógico");
-    XLSX.writeFile(wb,"marco_logico.xlsx");
-  };
+  const table = renderPreviewTable(rows, lang);
+  const wrap = document.getElementById("tableWrap");
+  wrap.innerHTML = "";
+  wrap.appendChild(table);
+
+  document.getElementById("preview").style.display = "block";
+  document.getElementById("btnDownload").disabled = false;
+
+  const pt = (lang==="pt");
+  document.getElementById("metaPill").textContent = pt
+    ? `Gerado para ${months} meses, ${rows.filter(r=>r.type==="so").length} objetivos`
+    : `Generated for ${months} months, ${rows.filter(r=>r.type==="so").length} objectives`;
+
+  const themeLabel = ({
+    circular: pt ? "economia circular / reuso" : "circular economy / reuse",
+    education: pt ? "educação" : "education",
+    agri: pt ? "agro / produção" : "agriculture / production",
+    health: pt ? "saúde" : "health",
+    culture: pt ? "cultura" : "culture",
+    climate: pt ? "clima / adaptação" : "climate / adaptation",
+    general: pt ? "geral" : "general"
+  })[narr.theme] || (pt ? "auto" : "auto");
+
+  document.getElementById("themePill").textContent = (pt ? "Tema: " : "Theme: ") + themeLabel;
+
+  lastRows = { rows, lang, title };
+});
+
+document.getElementById("btnDownload").addEventListener("click", (e)=>{
+  e.preventDefault();
+  if (!lastRows) return;
+
+  const { rows, lang, title } = lastRows;
+  const safe = (title || "marco_logico").toLowerCase()
+    .replace(/[^\w\s\-]/g,"")
+    .replace(/\s+/g,"_")
+    .slice(0,60);
+
+  const fileName = (lang==="pt")
+    ? `${safe}_marco_logico.xlsx`
+    : `${safe}_logical_framework.xlsx`;
+
+  exportXLSX(rows, fileName, lang);
 });
 </script>
-
 </body>
 </html>
 
