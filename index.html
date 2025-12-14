@@ -2,880 +2,241 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico, saída não repetitiva e multilíngue</title>
+  <title>Marco Lógico — Saída em Tabela</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    :root{--green:#1E7E34;--ink:#1b1b1b;--bg:#fafafa;--muted:#667085}
+    :root{
+      --bg:#f3f3f3;
+      --table:#e6e6e6;
+      --head:#d9d9d9;
+      --line:#bfbfbf;
+      --ink:#1b1b1b;
+    }
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
-    .wrap{max-width:980px;margin:0 auto;padding:20px}
-    header{text-align:center;padding:16px 0}
-    h1{margin:0 0 8px;font-size:26px}
-    .lead{color:var(--muted)}
-    form{background:#fff;border:1px solid #eee;border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-    label{display:block;margin:12px 0 6px;font-weight:600}
-    input,textarea,select{width:100%;border:1px solid #d8dee4;border-radius:8px;padding:10px;font:inherit}
-    textarea{min-height:110px;resize:vertical}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-    button{background:var(--green);color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:600;cursor:pointer;font-size:16px}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    .status{min-height:22px;color:var(--muted);margin:10px 0 0;font-size:14px}
-    .status.error{color:#c62828}.status.success{color:var(--green)}
-    .debug{background:#f7f7f7;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;display:none}
-    .table{margin-top:14px;background:#fff;border:1px solid #eee;border-radius:10px;overflow:auto}
-    table{width:100%;border-collapse:collapse;font-size:14px}
-    th,td{border-bottom:1px solid #eee;padding:8px 10px;vertical-align:top;word-break:break-word}
-    th{background:#f6fbf6;color:#0f5132;text-align:left;position:sticky;top:0}
-    td{white-space:pre-wrap}
-    .right{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
-    .hint{font-size:12px;color:var(--muted);margin-top:6px}
+    body{
+      margin:0;
+      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      background:#fafafa;
+      color:var(--ink);
+    }
+    .wrap{
+      max-width:1200px;
+      margin:0 auto;
+      padding:20px;
+    }
+    h1{
+      margin:0 0 12px;
+      font-size:24px;
+    }
+    form{
+      background:#fff;
+      border:1px solid #ddd;
+      border-radius:8px;
+      padding:16px;
+      margin-bottom:20px;
+    }
+    label{
+      display:block;
+      font-weight:600;
+      margin:12px 0 6px;
+    }
+    input, textarea, select{
+      width:100%;
+      border:1px solid #ccc;
+      border-radius:6px;
+      padding:8px;
+      font:inherit;
+    }
+    textarea{min-height:90px}
+    .row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    button{
+      margin-top:16px;
+      padding:10px 16px;
+      font-weight:600;
+      border:0;
+      border-radius:6px;
+      background:#1E7E34;
+      color:#fff;
+      cursor:pointer;
+    }
+    .table-wrap{
+      overflow:auto;
+      background:#fff;
+      border:1px solid #ccc;
+    }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:14px;
+      background:var(--table);
+    }
+    th, td{
+      border:1px solid var(--line);
+      padding:8px 10px;
+      vertical-align:top;
+    }
+    th{
+      background:var(--head);
+      font-weight:600;
+      text-align:left;
+    }
+    .col-obj{
+      width:220px;
+      font-weight:600;
+      background:var(--head);
+    }
+    .muted{
+      font-size:12px;
+      color:#555;
+      margin-top:6px;
+    }
   </style>
 </head>
 <body>
-  <header class="wrap">
-    <h1>Marco Lógico</h1>
-    <p class="lead">Saída com variedade real, sem repetir objetivos em resultados e atividades.</p>
-  </header>
+<div class="wrap">
+  <h1>Gerador de Marco Lógico</h1>
 
-  <main class="wrap">
-    <form id="frm" novalidate>
-      <div class="row3">
-        <div>
-          <label>Nome do Projeto *</label>
-          <input id="nomeProjeto" required placeholder="Ex.: Circularidade e Inclusão Produtiva">
-        </div>
-        <div>
-          <label>Qtd. Objetivos Específicos *</label>
-          <select id="nOE" required>
-            <option value="">Selecione</option><option>2</option><option>3</option><option>4</option><option>5</option>
-          </select>
-        </div>
-        <div>
-          <label>Idioma de saída *</label>
-          <select id="lang" required>
-            <option value="pt" selected>Português</option>
-            <option value="en">English</option>
-            <option value="es">Español</option>
-          </select>
-        </div>
+  <form id="frm">
+    <label>Objetivo Geral</label>
+    <textarea id="objGeral" required></textarea>
+
+    <div class="row">
+      <div>
+        <label>Duração do projeto, em meses</label>
+        <input type="number" id="duracao" min="1" max="60" value="12" required>
+        <div class="muted">A duração é exibida nas metas, não altera atividades.</div>
       </div>
-
-      <div class="row" style="margin-top:10px">
-        <div>
-          <label>Duração do projeto, em meses *</label>
-          <input id="durMonths" type="number" min="1" max="60" step="1" value="9" required>
-          <div class="hint">Usado para construir prazos redondos, com fases coerentes.</div>
-        </div>
-        <div>
-          <label>Arquivo do Edital (PDF/DOCX/TXT), opcional</label>
-          <input type="file" id="edital" accept=".pdf,.docx,.doc,.txt">
-        </div>
-      </div>
-
-      <label>Descrição da Proposta *</label>
-      <textarea id="desc" required placeholder="Contexto, público, território, metodologia, entregas, parceiros"></textarea>
-
-      <div id="oes"></div>
-
-      <div class="right" style="margin-top:12px">
-        <button id="btn">Gerar Marco Lógico</button>
-      </div>
-      <p id="status" class="status"></p>
-    </form>
-
-    <div id="diagBox" class="debug"></div>
-
-    <div id="previewBox" class="table" style="display:none">
-      <table id="tbl"><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody></tbody></table>
-      <div class="right" style="padding:10px">
-        <button id="dlXlsx">Baixar XLSX</button>
-        <button id="dlDocx">Baixar DOCX</button>
+      <div>
+        <label>Número de Objetivos Específicos</label>
+        <select id="nOE">
+          <option>1</option>
+          <option selected>2</option>
+          <option>3</option>
+          <option>4</option>
+        </select>
       </div>
     </div>
-  </main>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+    <div id="oes"></div>
 
-  <script>
-    const WEBHOOK_URL = "https://hook.us2.make.com/6lkkytmbws4tvlep6aquy1yvt2l0glwm";
+    <button type="submit">Gerar Tabela</button>
+  </form>
 
-    // UI OEs
-    const nOE = document.getElementById('nOE');
-    const oesDiv = document.getElementById('oes');
-    nOE.addEventListener('change', () => {
-      oesDiv.innerHTML = '';
-      const n = parseInt(nOE.value||0);
-      for (let i=1;i<=n;i++){
-        const wrap = document.createElement('div');
-        wrap.innerHTML = `
-          <div class="row" style="margin-top:10px">
-            <div>
-              <label>OE ${i}, título *</label>
-              <input required id="oe_t_${i}" placeholder="Ex.: Fortalecer cadeias de valor de reúso">
-            </div>
-            <div>
-              <label>OE ${i}, foco (opcional)</label>
-              <input id="oe_f_${i}" placeholder="Ex.: upcycling, logística reversa, capacitação, M&amp;E">
-            </div>
-          </div>`;
-        oesDiv.appendChild(wrap);
+  <div class="table-wrap" id="out" style="display:none">
+    <table id="tbl"></table>
+  </div>
+</div>
+
+<script>
+  const oesDiv = document.getElementById("oes");
+  const nOE = document.getElementById("nOE");
+
+  function renderOEInputs(){
+    oesDiv.innerHTML="";
+    const n = parseInt(nOE.value);
+    for(let i=1;i<=n;i++){
+      const div=document.createElement("div");
+      div.innerHTML=`
+        <label>Objetivo Específico ${i}</label>
+        <textarea id="oe_${i}" required></textarea>
+
+        <table style="margin-top:8px;width:100%;border-collapse:collapse">
+          <tr>
+            <th>Resultados</th>
+            <th>Indicadores</th>
+            <th>Meta</th>
+            <th>Meios de Verificação</th>
+          </tr>
+          <tr>
+            <td><textarea id="r_${i}_1"></textarea></td>
+            <td><textarea id="ind_${i}_1"></textarea></td>
+            <td><textarea id="meta_${i}_1"></textarea></td>
+            <td><textarea id="mv_${i}_1"></textarea></td>
+          </tr>
+          <tr>
+            <td><textarea id="r_${i}_2"></textarea></td>
+            <td><textarea id="ind_${i}_2"></textarea></td>
+            <td><textarea id="meta_${i}_2"></textarea></td>
+            <td><textarea id="mv_${i}_2"></textarea></td>
+          </tr>
+          <tr>
+            <td><textarea id="r_${i}_3"></textarea></td>
+            <td><textarea id="ind_${i}_3"></textarea></td>
+            <td><textarea id="meta_${i}_3"></textarea></td>
+            <td><textarea id="mv_${i}_3"></textarea></td>
+          </tr>
+        </table>
+      `;
+      oesDiv.appendChild(div);
+    }
+  }
+  nOE.addEventListener("change", renderOEInputs);
+  renderOEInputs();
+
+  document.getElementById("frm").addEventListener("submit", e=>{
+    e.preventDefault();
+    const tbl=document.getElementById("tbl");
+    tbl.innerHTML="";
+
+    const dur=document.getElementById("duracao").value;
+    const og=document.getElementById("objGeral").value;
+
+    // Objetivo Geral
+    tbl.innerHTML+=`
+      <tr>
+        <td class="col-obj">Objetivo Geral</td>
+        <td colspan="4">${og}</td>
+      </tr>
+    `;
+
+    const n=parseInt(nOE.value);
+    for(let i=1;i<=n;i++){
+      const oe=document.getElementById(`oe_${i}`).value;
+
+      tbl.innerHTML+=`
+        <tr>
+          <td class="col-obj">Objetivo Específico ${i}</td>
+          <td colspan="4"><em>${oe}</em></td>
+        </tr>
+        <tr>
+          <th></th>
+          <th>Resultados</th>
+          <th>Indicadores</th>
+          <th>Meta</th>
+          <th>Meios de Verificação</th>
+        </tr>
+      `;
+
+      for(let j=1;j<=3;j++){
+        const r=document.getElementById(`r_${i}_${j}`).value;
+        const ind=document.getElementById(`ind_${i}_${j}`).value;
+        const meta=document.getElementById(`meta_${i}_${j}`).value;
+        const mv=document.getElementById(`mv_${i}_${j}`).value;
+
+        if(!r && !ind && !meta && !mv) continue;
+
+        tbl.innerHTML+=`
+          <tr>
+            <td></td>
+            <td>${r}</td>
+            <td>${ind}</td>
+            <td>${meta.replace(/\{meses\}/g,dur)}</td>
+            <td>${mv}</td>
+          </tr>
+        `;
       }
-    });
-
-    // Utils
-    function norm(s){ return (s||"").replace(/\s+/g," ").trim(); }
-    function clean(s){ return norm(String(s)).replace(/\u2026|\.{3}/g,""); }
-    function joinMV(arr){ return (arr||[]).filter(Boolean).join("; "); }
-
-    // PRNG
-    function cyrb128(str){
-      let h1=1779033703,h2=3144134277,h3=1013904242,h4=2773480762;
-      for(let i=0;i<str.length;i++){
-        let k=str.charCodeAt(i);
-        h1=h2^Math.imul(h1^k,597399067);
-        h2=h3^Math.imul(h2^k,2869860233);
-        h3=h4^Math.imul(h3^k,951274213);
-        h4=h1^Math.imul(h4^k,2716044179);
-      }
-      h1=Math.imul(h3^(h1>>>18),597399067);
-      h2=Math.imul(h4^(h2>>>22),2869860233);
-      h3=Math.imul(h1^(h3>>>17),951274213);
-      h4=Math.imul(h2^(h4>>>19),2716044179);
-      return [(h1^h2^h3^h4)>>>0];
-    }
-    function mulberry32(a){
-      return function(){
-        let t=a+=0x6D2B79F5;
-        t=Math.imul(t^(t>>>15), t|1);
-        t^=t+Math.imul(t^(t>>>7), t|61);
-        return ((t^(t>>>14))>>>0)/4294967296;
-      };
-    }
-    function pick(rng, arr){ return arr[Math.floor(rng()*arr.length)] }
-    function shuffle(rng, arr){
-      const a = arr.slice();
-      for(let i=a.length-1;i>0;i--){
-        const j = Math.floor(rng()*(i+1));
-        [a[i],a[j]]=[a[j],a[i]];
-      }
-      return a;
     }
 
-    // Extract text from file
-    async function readFileText(file){
-      if(!file) return "";
-      if (file.type === "text/plain") return (await file.text()).slice(0,150000);
-      if (file.type === "application/pdf"){
-        const buf = new Uint8Array(await file.arrayBuffer());
-        const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-        const max = Math.min(pdf.numPages, 12);
-        let out="";
-        for(let p=1;p<=max;p++){
-          const page=await pdf.getPage(p);
-          const txt=await page.getTextContent();
-          out+=txt.items.map(it=>it.str).join(" ")+"\n";
-          if(out.length>150000) break;
-        }
-        return out.slice(0,150000);
-      }
-      if (file.name.toLowerCase().endsWith(".docx")){
-        const ab = await file.arrayBuffer();
-        const r = await window.mammoth.extractRawText({arrayBuffer:ab});
-        return (r.value||"").slice(0,150000);
-      }
-      return "";
-    }
-
-    // Labels
-    const LABEL = {
-      pt:{geral:"Objetivo Geral",oe:i=>`Objetivo Específico ${i}`,resultados:"Resultados",indic:"Indicadores",meta:"Meta",mov:"Meios de Verificação",ativ:"Atividades",desc:"Descrição",log:"Lógica de Intervenção",prazo:"Prazo"},
-      en:{geral:"Overall Objective",oe:i=>`Specific Objective ${i}`,resultados:"Results",indic:"Indicators",meta:"Target",mov:"Means of Verification",ativ:"Activities",desc:"Description",log:"Intervention Logic",prazo:"Timeline"},
-      es:{geral:"Objetivo General",oe:i=>`Objetivo Específico ${i}`,resultados:"Resultados",indic:"Indicadores",meta:"Meta",mov:"Medios de Verificación",ativ:"Actividades",desc:"Descripción",log:"Lógica de Intervención",prazo:"Plazo"}
-    };
-
-    // Text building blocks, designed to avoid repeating OE title
-    const BANK = {
-      pt:{
-        ogFrames:[
-          (nome,territ,publico,metodo)=>`Executar o projeto ${nome} para ampliar resultados em ${territ}, com foco em ${publico}, por meio de ${metodo}, e monitoramento orientado a evidências.`,
-          (nome,territ,publico,metodo)=>`Implementar ${nome} em ${territ}, priorizando ${publico}, combinando ${metodo} e uma rotina de monitoramento que assegure entregas verificáveis.`
-        ],
-        metodo:["governança colaborativa","ciclos curtos de implementação e ajuste","formação prática com acompanhamento em campo","planejamento participativo com validação comunitária","gestão orientada por indicadores e qualidade"],
-        publico:["grupos liderados por mulheres","coletivos comunitários","empreendimentos solidários","trabalhadoras e trabalhadores locais","redes territoriais de produtores e reparadores"],
-        territ:["territórios vulneráveis","bairros periféricos","municípios prioritários","comunidades locais","áreas urbanas com baixa oferta de oportunidades"],
-        movBase:["Relatórios técnicos","Planilhas de monitoramento","Registros fotográficos"],
-        movPart:["Listas de presença","Registros de inscrição","Questionários"],
-        resultTitles:[
-          "Rotinas operacionais validadas e em uso",
-          "Capacidades técnicas e de gestão aplicadas no dia a dia",
-          "Acesso ampliado a mercados e canais de venda",
-          "Qualidade e rastreabilidade fortalecidas",
-          "Coordenação e governança local funcionando"
-        ],
-        resultFrames:[
-          (temaA,temaB)=>`Processos de ${temaA} e ${temaB} passam a operar com padrões mínimos de qualidade, registro e responsabilidades definidas.`,
-          (temaA,temaB)=>`A cadeia local consolida fluxos consistentes de ${temaA} e ${temaB}, reduzindo perdas e aumentando a previsibilidade.`,
-          (temaA,temaB)=>`Ferramentas simples de gestão são adotadas para organizar ${temaA} e ${temaB}, apoiar decisões e reduzir retrabalho.`,
-          (temaA,temaB)=>`A operação demonstra ganhos práticos em ${temaA} e ${temaB}, com evidências registradas e aprendizado sistematizado.`
-        ],
-        actTitles:[
-          "Diagnóstico aplicado e linha de base",
-          "Desenho do fluxo operacional e papéis",
-          "Pilotos em ciclos curtos e ajustes",
-          "Rotina de qualidade e segurança",
-          "Plano comercial e de precificação",
-          "Formação prática e mentoria",
-          "Monitoramento, lições aprendidas e réplica"
-        ],
-        actFrames:[
-          (temaA,temaB)=>`Mapear gargalos de ${temaA} e ${temaB}, definir linha de base, e validar prioridades com os atores locais.`,
-          (temaA,temaB)=>`Desenhar um fluxo claro para ${temaA} e ${temaB}, com papéis, checkpoints, padrões mínimos e instrumentos de registro.`,
-          (temaA,temaB)=>`Executar pilotos de ${temaA} e ${temaB} em ciclos curtos, coletar feedback, e consolidar ajustes em procedimentos.`,
-          (temaA,temaB)=>`Implantar uma rotina de controle de qualidade para ${temaA} e ${temaB}, incluindo critérios de aceitação e rastreabilidade.`,
-          (temaA,temaB)=>`Construir um plano de mercado para ${temaA} e ${temaB}, incluindo precificação, canais, comunicação e metas realistas.`,
-          (temaA,temaB)=>`Realizar formação prática e mentoria em ${temaA} e ${temaB}, com acompanhamento e verificação de aplicação em campo.`,
-          (temaA,temaB)=>`Consolidar evidências, lições aprendidas e materiais de réplica sobre ${temaA} e ${temaB}, para apoiar escalonamento.`
-        ],
-        logicPool:[
-          "Alinhar governança, recursos e critérios de qualidade, garantindo execução coordenada.",
-          "Transferir conhecimento, padronizar rotinas e apoiar autonomia local.",
-          "Testar, medir, ajustar e consolidar aprendizados para reduzir risco e aumentar efetividade.",
-          "Organizar evidências, apoiar tomada de decisão e viabilizar replicação."
-        ]
-      },
-      en:{
-        ogFrames:[
-          (nome,territ,publico,metodo)=>`Deliver the ${nome} project across ${territ}, prioritizing ${publico}, using ${metodo}, with evidence based monitoring and verifiable outputs.`,
-          (nome,territ,publico,metodo)=>`Implement ${nome} in ${territ}, focusing on ${publico}, combining ${metodo} and a monitoring routine aligned with the call requirements.`
-        ],
-        metodo:["collaborative governance","short implementation and adjustment cycles","hands on training with field follow up","participatory planning with community validation","indicator driven quality management"],
-        publico:["women led groups","community collectives","solidarity based enterprises","local workers and micro entrepreneurs","territorial networks of makers and repairers"],
-        territ:["vulnerable territories","peri urban areas","priority municipalities","local communities","urban areas with limited opportunities"],
-        movBase:["Technical reports","Monitoring spreadsheets","Photo records"],
-        movPart:["Attendance lists","Registration records","Surveys"],
-        resultTitles:[
-          "Operational routines validated and adopted",
-          "Technical and management capacity applied in practice",
-          "Improved market access and sales channels",
-          "Stronger quality control and traceability",
-          "Local coordination and governance in place"
-        ],
-        resultFrames:[
-          (temaA,temaB)=>`${temaA} and ${temaB} are delivered through consistent workflows, with minimum quality standards, clear roles, and basic records.`,
-          (temaA,temaB)=>`The local system stabilizes ${temaA} and ${temaB} flows, reducing losses and improving predictability for participating groups.`,
-          (temaA,temaB)=>`Simple management tools are adopted to organize ${temaA} and ${temaB}, support decisions, and reduce rework.`,
-          (temaA,temaB)=>`Measured improvements are demonstrated in ${temaA} and ${temaB}, backed by documented evidence and structured learning.`
-        ],
-        actTitles:[
-          "Applied diagnostic and baseline",
-          "Workflow design and responsibilities",
-          "Short cycle pilots and adjustments",
-          "Quality and safety routine",
-          "Go to market and pricing plan",
-          "Hands on training and mentoring",
-          "Monitoring, lessons learned and replication"
-        ],
-        actFrames:[
-          (temaA,temaB)=>`Identify bottlenecks in ${temaA} and ${temaB}, establish a baseline, and validate priorities with local stakeholders.`,
-          (temaA,temaB)=>`Design a clear workflow for ${temaA} and ${temaB}, defining roles, checkpoints, minimum standards, and record keeping tools.`,
-          (temaA,temaB)=>`Run pilots for ${temaA} and ${temaB} in short cycles, capture feedback, and consolidate adjustments into procedures.`,
-          (temaA,temaB)=>`Set up a quality control routine for ${temaA} and ${temaB}, including acceptance criteria and basic traceability.`,
-          (temaA,temaB)=>`Build a market plan for ${temaA} and ${temaB}, including pricing, channels, communication, and realistic targets.`,
-          (temaA,temaB)=>`Deliver hands on training and mentoring on ${temaA} and ${temaB}, with follow up to verify adoption in practice.`,
-          (temaA,temaB)=>`Consolidate evidence, lessons learned, and replication materials on ${temaA} and ${temaB}, supporting scale up.`
-        ],
-        logicPool:[
-          "Align governance, resources, and quality criteria, ensuring coordinated delivery.",
-          "Transfer knowledge, standardize routines, and strengthen local ownership.",
-          "Test, measure, adjust, and consolidate learning to reduce risk and improve effectiveness.",
-          "Organize evidence to support decisions and enable replication."
-        ]
-      },
-      es:{
-        ogFrames:[
-          (nome,territ,publico,metodo)=>`Ejecutar el proyecto ${nome} en ${territ}, priorizando ${publico}, mediante ${metodo}, con monitoreo basado en evidencias y productos verificables.`,
-          (nome,territ,publico,metodo)=>`Implementar ${nome} en ${territ}, con foco en ${publico}, combinando ${metodo} y un sistema de monitoreo alineado al llamado.`
-        ],
-        metodo:["gobernanza colaborativa","ciclos cortos de implementación y ajuste","formación práctica con seguimiento en campo","planificación participativa con validación comunitaria","gestión basada en indicadores y calidad"],
-        publico:["grupos liderados por mujeres","colectivos comunitarios","emprendimientos de economía solidaria","trabajadoras y trabajadores locales","redes territoriales de productores y reparadores"],
-        territ:["territorios vulnerables","zonas periurbanas","municipios prioritarios","comunidades locales","áreas urbanas con baja oferta de oportunidades"],
-        movBase:["Informes técnicos","Hojas de monitoreo","Registros fotográficos"],
-        movPart:["Listas de asistencia","Registros de inscripción","Encuestas"],
-        resultTitles:[
-          "Rutinas operativas validadas y en uso",
-          "Capacidades técnicas y de gestión aplicadas",
-          "Acceso mejorado a mercados y canales de venta",
-          "Control de calidad y trazabilidad fortalecidos",
-          "Coordinación y gobernanza local en funcionamiento"
-        ],
-        resultFrames:[
-          (temaA,temaB)=>`${temaA} y ${temaB} se implementan con flujos consistentes, estándares mínimos de calidad, roles claros y registros básicos.`,
-          (temaA,temaB)=>`El sistema local estabiliza flujos de ${temaA} y ${temaB}, reduciendo pérdidas y mejorando la previsibilidad.`,
-          (temaA,temaB)=>`Se adoptan herramientas simples de gestión para organizar ${temaA} y ${temaB}, apoyar decisiones y reducir retrabajo.`,
-          (temaA,temaB)=>`Se demuestran mejoras medibles en ${temaA} y ${temaB}, respaldadas por evidencias registradas y aprendizaje sistematizado.`
-        ],
-        actTitles:[
-          "Diagnóstico aplicado y línea de base",
-          "Diseño del flujo y responsabilidades",
-          "Pilotos en ciclos cortos y ajustes",
-          "Rutina de calidad y seguridad",
-          "Plan comercial y de precios",
-          "Formación práctica y mentoría",
-          "Monitoreo, aprendizajes y réplica"
-        ],
-        actFrames:[
-          (temaA,temaB)=>`Identificar cuellos de botella en ${temaA} y ${temaB}, definir línea de base, y validar prioridades con actores locales.`,
-          (temaA,temaB)=>`Diseñar un flujo claro para ${temaA} y ${temaB}, con roles, puntos de control, estándares mínimos y herramientas de registro.`,
-          (temaA,temaB)=>`Ejecutar pilotos de ${temaA} y ${temaB} en ciclos cortos, recoger retroalimentación, y consolidar ajustes en procedimientos.`,
-          (temaA,temaB)=>`Implementar una rutina de control de calidad para ${temaA} y ${temaB}, con criterios de aceptación y trazabilidad básica.`,
-          (temaA,temaB)=>`Construir un plan de mercado para ${temaA} y ${temaB}, incluyendo precios, canales, comunicación y metas realistas.`,
-          (temaA,temaB)=>`Realizar formación práctica y mentoría en ${temaA} y ${temaB}, con seguimiento para verificar adopción.`,
-          (temaA,temaB)=>`Consolidar evidencias, aprendizajes y materiales de réplica sobre ${temaA} y ${temaB}, para apoyar escalamiento.`
-        ],
-        logicPool:[
-          "Alinear gobernanza, recursos y criterios de calidad, asegurando una ejecución coordinada.",
-          "Transferir conocimiento, estandarizar rutinas y fortalecer apropiación local.",
-          "Probar, medir, ajustar y consolidar aprendizajes para reducir riesgo y aumentar efectividad.",
-          "Organizar evidencias para apoyar decisiones y habilitar replicación."
-        ]
-      }
-    };
-
-    // Keyword extraction, with lightweight normalization
-    function keyTerms(text, max=18){
-      const t=(text||"")
-        .toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-        .replace(/[^a-z0-9\s]/g," ")
-        .split(/\s+/)
-        .filter(w => w.length>=4 && !stop.has(w));
-      const f = new Map();
-      for(const w of t) f.set(w,(f.get(w)||0)+1);
-      return Array.from(f.entries()).sort((a,b)=>b[1]-a[1]).slice(0,max).map(([w])=>w);
-    }
-    const stop = new Set([
-      "para","pela","pelo","com","sem","sobre","entre","onde","como","mais","menos","isso","essa","este","esta","essas","estes",
-      "from","with","that","this","their","them","into","over","under","between","across","will","shall","must","should",
-      "desde","para","como","sobre","entre","donde","esta","este","estas","estos","más","menos"
-    ]);
-
-    // Theme mapping, prefers meaningful buckets, never reuses OE title verbatim
-    function buildThemes(desc, edital, oeTitle, oeFocus, lang, rng){
-      const raw = keyTerms([desc,edital,oeFocus].filter(Boolean).join(" "), 24);
-      const t = raw.map(w => w.trim()).filter(Boolean);
-
-      const map = {
-        pt:{
-          circular:["circular","circularidade","reuse","reuso","reutilizacao","reutilização","reciclagem","upcycling","reparo","reparacao","reparação","remanufatura"],
-          ops:["logistica","logística","coleta","triagem","sorting","transporte","estoque","rastreabilidade","qualidade","seguranca","segurança","padrao","padrão"],
-          market:["mercado","venda","precificacao","precificação","canal","cliente","marca","comunicacao","comunicação","plataforma","ecommerce","e-commerce"],
-          people:["mulheres","women","jovens","youth","comunidade","comunitario","comunitária","grupo","coletivo","trabalho","renda","emprego","capacitacao","capacitação"],
-          climate:["clima","climatico","climática","adaptacao","adaptação","resiliencia","resiliência","mitigacao","mitigação","emissoes","emissões"]
-        },
-        en:{
-          circular:["circular","reuse","upcycling","repair","refurbish","remanufacture","recycling"],
-          ops:["logistics","collection","sorting","transport","inventory","traceability","quality","safety","standards","workflow"],
-          market:["market","sales","pricing","channels","customers","branding","communication","platform","ecommerce","e-commerce"],
-          people:["women","youth","community","collective","jobs","income","training","skills","entrepreneurship"],
-          climate:["climate","adaptation","resilience","mitigation","emissions"]
-        },
-        es:{
-          circular:["circular","reuso","reutilizacion","reutilización","upcycling","reparacion","reparación","reciclaje"],
-          ops:["logistica","logística","recoleccion","recolección","clasificacion","clasificación","transporte","inventario","trazabilidad","calidad","seguridad","estandares","estándares"],
-          market:["mercado","ventas","precios","canales","clientes","marca","comunicacion","comunicación","plataforma","ecommerce","e-commerce"],
-          people:["mujeres","women","jovenes","jóvenes","comunidad","colectivo","empleo","ingresos","formacion","formación","capacidades","emprendimiento"],
-          climate:["clima","adaptacion","adaptación","resiliencia","mitigacion","mitigación","emisiones"]
-        }
-      };
-
-      const dict = map[lang] || map.pt;
-      const buckets = {circular:[],ops:[],market:[],people:[],climate:[]};
-      for(const w of t){
-        for(const k of Object.keys(buckets)){
-          if(dict[k].includes(w)) buckets[k].push(w);
-        }
-      }
-
-      const fallback = {
-        pt:["coleta e triagem","reparo e reúso","qualidade e rastreabilidade","precificação e canais","formação e mentoria","monitoramento e evidências","governança local"],
-        en:["collection and sorting","repair and reuse","quality and traceability","pricing and channels","training and mentoring","monitoring and evidence","local governance"],
-        es:["recolección y clasificación","reparación y reuso","calidad y trazabilidad","precios y canales","formación y mentoría","monitoreo y evidencias","gobernanza local"]
-      }[lang] || fallback.pt;
-
-      const chosen = [];
-      const order = shuffle(rng, ["circular","ops","market","people","climate"]);
-      for(const k of order){
-        if(chosen.length>=4) break;
-        if(buckets[k].length){
-          const w = buckets[k][0];
-          chosen.push(humanizeTheme(w, lang));
-        }
-      }
-      while(chosen.length<4) chosen.push(pick(rng, fallback));
-      return chosen.slice(0,4);
-    }
-
-    function humanizeTheme(term, lang){
-      const t = term.toLowerCase();
-      const H = {
-        pt:{
-          "reparo":"reparo e manutenção",
-          "reparacao":"reparo e manutenção",
-          "reparação":"reparo e manutenção",
-          "triagem":"triagem e classificação",
-          "coleta":"coleta e consolidação",
-          "rastreabilidade":"rastreabilidade e registros",
-          "qualidade":"controle de qualidade",
-          "precificacao":"precificação e margem",
-          "precificação":"precificação e margem",
-          "logistica":"logística e roteirização",
-          "logística":"logística e roteirização",
-          "ecommerce":"e-commerce e canais digitais",
-          "e-commerce":"e-commerce e canais digitais",
-          "capacitacao":"formação prática",
-          "capacitação":"formação prática",
-          "resiliencia":"resiliência local",
-          "resiliência":"resiliência local"
-        },
-        en:{
-          "repair":"repair and maintenance",
-          "sorting":"sorting and grading",
-          "collection":"collection and consolidation",
-          "traceability":"traceability and records",
-          "quality":"quality control",
-          "pricing":"pricing and margins",
-          "logistics":"logistics and routing",
-          "ecommerce":"e-commerce and digital channels",
-          "training":"hands on training",
-          "resilience":"local resilience"
-        },
-        es:{
-          "reparacion":"reparación y mantenimiento",
-          "reparación":"reparación y mantenimiento",
-          "clasificacion":"clasificación y control",
-          "clasificación":"clasificación y control",
-          "recoleccion":"recolección y consolidación",
-          "recolección":"recolección y consolidación",
-          "trazabilidad":"trazabilidad y registros",
-          "calidad":"control de calidad",
-          "precios":"precios y márgenes",
-          "logistica":"logística y rutas",
-          "logística":"logística y rutas",
-          "ecommerce":"e-commerce y canales digitales",
-          "formacion":"formación práctica",
-          "formación":"formación práctica",
-          "resiliencia":"resiliencia local"
-        }
-      };
-      const dict = H[lang] || H.pt;
-      return dict[t] || term;
-    }
-
-    // Rounded targets
-    function roundPct(n){ return Math.max(50, Math.min(95, Math.round(n/5)*5)); }
-    function round10(n){ return Math.max(30, Math.round(n/10)*10); }
-
-    function computeBaseScale(durationMonths, nObjectives){
-      const d = Math.max(1, Math.min(60, durationMonths));
-      const o = Math.max(1, Math.min(6, nObjectives || 1));
-      return 0.8 + (d/12) * 0.9 + (o-1)*0.08;
-    }
-
-    // Timeline, uses months and returns round ranges
-    function timelinePhases(durationMonths, lang){
-      const M = Math.max(1, Math.min(60, durationMonths));
-      const m1 = Math.max(1, Math.round(M*0.25));
-      const m2 = Math.max(m1+1, Math.round(M*0.70));
-      const p1 = {s:1,e:m1};
-      const p2 = {s:m1+1,e:m2};
-      const p3 = {s:m2+1,e:M};
-      const fmt = (p) => {
-        if(lang==="en") return `Months ${p.s} to ${p.e}`;
-        if(lang==="es") return `Meses ${p.s} a ${p.e}`;
-        return `Meses ${p.s} a ${p.e}`;
-      };
-      return { plan:fmt(p1), impl:fmt(p2), close:fmt(p3) };
-    }
-
-    // Indicators, picks 2 per result, with round numbers
-    function indicatorsFor(resultTitle, themes, lang, rng, baseScale){
-      const B = BANK[lang];
-      const pct1 = roundPct(70 + rng()*20 + baseScale*6);
-      const pct2 = roundPct(60 + rng()*25 + baseScale*5);
-      const sat  = roundPct(65 + rng()*20);
-      const participants = round10(90 + rng()*120 + baseScale*40);
-
-      const pool = [
-        {
-          texto: lang==="en" ? `Percentage of planned outputs delivered for ${resultTitle.toLowerCase()}`
-                : lang==="es" ? `Porcentaje de productos planificados entregados para ${resultTitle.toLowerCase()}`
-                : `Percentual de entregas concluídas para ${resultTitle.toLowerCase()}`,
-          meta: `>= ${pct1}%`,
-          meios_verificacao: B.movBase
-        },
-        {
-          texto: lang==="en" ? `Percentage of participating groups applying new routines in practice`
-                : lang==="es" ? `Porcentaje de grupos participantes aplicando nuevas rutinas en la práctica`
-                : `Percentual de grupos participantes aplicando novas rotinas na prática`,
-          meta: `>= ${pct2}%`,
-          meios_verificacao: B.movBase
-        },
-        {
-          texto: lang==="en" ? `Number of participants reached through training and mentoring activities`
-                : lang==="es" ? `Número de participantes alcanzados mediante formación y mentoría`
-                : `Número de participantes alcançados por formação e mentoria`,
-          meta: `>= ${participants}`,
-          meios_verificacao: B.movPart
-        },
-        {
-          texto: lang==="en" ? `Satisfaction rate among participants regarding the support provided`
-                : lang==="es" ? `Índice de satisfacción de participantes sobre el apoyo recibido`
-                : `Índice de satisfação de participantes sobre o apoio recebido`,
-          meta: `>= ${sat}%`,
-          meios_verificacao: B.movPart
-        }
-      ];
-
-      const idxs = shuffle(rng, [0,1,2,3]).slice(0,2);
-      return idxs.map(i => pool[i]);
-    }
-
-    // Results and activities, never echo OE title string, only uses themes
-    function buildResultsAndActivities(themes, durationMonths, lang, rng, baseScale){
-      const B = BANK[lang];
-      const phases = timelinePhases(durationMonths, lang);
-
-      const resultsCount = 3;
-      const actsPerResult = 4;
-
-      const resultTitles = shuffle(rng, B.resultTitles).slice(0, resultsCount);
-      const resultFrames = shuffle(rng, B.resultFrames);
-      const actFrames = shuffle(rng, B.actFrames);
-      const actTitles = shuffle(rng, B.actTitles);
-      const logicPool = B.logicPool;
-
-      const out = [];
-      for(let r=0;r<resultsCount;r++){
-        const tA = themes[(r*2) % themes.length];
-        const tB = themes[(r*2+1) % themes.length];
-
-        const rTitle = resultTitles[r];
-        const rText  = resultFrames[r % resultFrames.length](tA, tB);
-
-        const indicators = indicatorsFor(rTitle, themes, lang, rng, baseScale);
-
-        const activities = [];
-        const usedATitles = new Set();
-        for(let a=0;a<actsPerResult;a++){
-          const aA = themes[(r+a) % themes.length];
-          const aB = themes[(r+a+1) % themes.length];
-
-          let title = actTitles[(r*actsPerResult + a) % actTitles.length];
-          while(usedATitles.has(title)) title = pick(rng, actTitles);
-          usedATitles.add(title);
-
-          const desc = actFrames[(r*actsPerResult + a) % actFrames.length](aA, aB);
-          const log  = pick(rng, logicPool);
-
-          const prazo = (a===0) ? phases.plan : (a<=2) ? phases.impl : phases.close;
-          const mv    = (a===0 || a===2) ? B.movBase : B.movPart;
-
-          activities.push({
-            titulo: title,
-            descricao: desc,
-            logica_intervencao: log,
-            prazo,
-            meios_verificacao: mv
-          });
-        }
-
-        out.push({
-          titulo: rTitle,
-          descricao: rText,
-          indicadores: indicators,
-          atividades: activities
-        });
-      }
-      return out;
-    }
-
-    // Overall objective, uses project name and extracted context, without reusing OE titles
-    function buildOverallObjective(nome, desc, edital, lang, rng){
-      const B = BANK[lang];
-      const terms = keyTerms(desc + " " + edital, 16);
-
-      const territ = pick(rng, B.territ);
-      const publico = pick(rng, B.publico);
-      const metodo = pick(rng, B.metodo);
-
-      const focus = terms.slice(0,4).join(", ");
-      const frame = pick(rng, B.ogFrames);
-
-      if(focus){
-        const add = (lang==="en")
-          ? ` Focus areas include ${focus}.`
-          : (lang==="es")
-            ? ` Áreas de foco incluyen ${focus}.`
-            : ` Áreas de foco incluem ${focus}.`;
-        return frame(clean(nome), territ, publico, metodo) + add;
-      }
-      return frame(clean(nome), territ, publico, metodo);
-    }
-
-    function generateML(nome, desc, oes, edital, lang, durationMonths){
-      const seed = cyrb128(nome+"|"+desc+"|"+(oes||[]).map(o=>o.titulo).join("|")+"|"+lang+"|"+durationMonths)[0];
-      const rng = mulberry32(seed);
-      const baseScale = computeBaseScale(durationMonths, (oes||[]).length);
-
-      const objetivo_geral = buildOverallObjective(nome, desc, edital, lang, rng);
-
-      const objetivos_especificos = (oes||[]).map((oe,idx)=>{
-        const titulo = clean(oe.titulo || `OE ${idx+1}`);
-        const themes = buildThemes(desc, edital, titulo, oe.foco || "", lang, rng);
-        const resultados = buildResultsAndActivities(themes, durationMonths, lang, rng, baseScale);
-        return { numero: oe.numero||idx+1, titulo, temas: themes, resultados };
-      });
-
-      return { objetivo_geral, objetivos_especificos, duracao_meses: durationMonths };
-    }
-
-    // Preview
-    function renderPreview(ml, lang){
-      const L = LABEL[lang];
-      const tb = document.querySelector('#tbl tbody'); tb.innerHTML="";
-      const push=(k,v)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><b>${k}</b></td><td>${v||''}</td>`; tb.appendChild(tr); };
-
-      const dur = (lang==="en") ? `Project duration: ${ml.duracao_meses} months`
-                : (lang==="es") ? `Duración del proyecto: ${ml.duracao_meses} meses`
-                : `Duração do projeto: ${ml.duracao_meses} meses`;
-
-      push(L.geral, ml.objetivo_geral + "\n\n" + dur);
-
-      (ml.objetivos_especificos||[]).forEach((oe,idx)=>{
-        push(L.oe(oe.numero||idx+1), oe.titulo);
-
-        if(oe.temas?.length){
-          const themesLine = (lang==="en") ? `Themes: ${oe.temas.join(", ")}`
-                           : (lang==="es") ? `Temas: ${oe.temas.join(", ")}`
-                           : `Temas: ${oe.temas.join(", ")}`;
-          push("", themesLine);
-        }
-
-        push("", `\n${L.resultados}`);
-        (oe.resultados||[]).forEach((r)=>{
-          push("", `\n${r.titulo}\n${r.descricao}`);
-          push(L.indic, "");
-          (r.indicadores||[]).forEach(ind=>{
-            push("•", `${ind.texto}\n${L.meta}: ${ind.meta}\n${L.mov}: ${joinMV(ind.meios_verificacao)}`);
-          });
-        });
-
-        push("", `\n${L.ativ}`);
-        (oe.resultados||[]).forEach(r=>{
-          (r.atividades||[]).forEach(a=>{
-            push("•", `${a.titulo}\n${L.desc}: ${a.descricao}\n${L.log}: ${a.logica_intervencao}\n${L.prazo}: ${a.prazo}\n${L.mov}: ${joinMV(a.meios_verificacao)}`);
-          });
-        });
-      });
-
-      document.getElementById('previewBox').style.display='block';
-    }
-
-    // XLSX
-    function baixarXlsx(ml, nomeProjeto, lang){
-      const L = LABEL[lang];
-      const wb = XLSX.utils.book_new();
-
-      const dur = (lang==="en") ? `Project duration: ${ml.duracao_meses} months`
-                : (lang==="es") ? `Duración del proyecto: ${ml.duracao_meses} meses`
-                : `Duração do projeto: ${ml.duracao_meses} meses`;
-
-      const aoa = [
-        [ "MARCO LÓGICO" ],
-        [ L.geral, (ml.objetivo_geral||"") + "\n\n" + dur ]
-      ];
-
-      (ml.objetivos_especificos||[]).forEach((oe,idx)=>{
-        aoa.push([ L.oe(oe.numero||idx+1), oe.titulo ]);
-        if(oe.temas?.length){
-          const t = (lang==="en") ? `Themes: ${oe.temas.join(", ")}`
-                  : (lang==="es") ? `Temas: ${oe.temas.join(", ")}`
-                  : `Temas: ${oe.temas.join(", ")}`;
-          aoa.push([ "", t ]);
-        }
-
-        aoa.push(["", L.resultados, "Descrição", L.indic, L.meta, L.mov ]);
-        (oe.resultados||[]).forEach(r=>{
-          const inds=r.indicadores||[];
-          for(let i=0;i<inds.length;i++){
-            const ind=inds[i];
-            aoa.push([
-              "",
-              i===0 ? r.titulo : "",
-              i===0 ? r.descricao : "",
-              ind.texto,
-              ind.meta,
-              joinMV(ind.meios_verificacao)
-            ]);
-          }
-        });
-
-        aoa.push(["", L.ativ, L.desc, L.log, L.prazo, L.mov ]);
-        (oe.resultados||[]).forEach(r=>{
-          (r.atividades||[]).forEach(a=>{
-            aoa.push(["", a.titulo, a.descricao, a.logica_intervencao, a.prazo, joinMV(a.meios_verificacao)]);
-          });
-        });
-      });
-
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols']=[{wch:26},{wch:34},{wch:54},{wch:54},{wch:16},{wch:44}];
-      XLSX.utils.book_append_sheet(wb, ws, "Marco Lógico");
-      const safe=(nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30);
-      XLSX.writeFile(wb, `Marco_Logico_${safe}_${Date.now()}.xlsx`);
-    }
-
-    // DOCX
-    async function baixarDocx(ml, nomeProjeto, lang){
-      const { Document, Paragraph, TextRun, HeadingLevel, Packer } = window.docx;
-      const L = LABEL[lang];
-
-      const dur = (lang==="en") ? `Project duration: ${ml.duracao_meses} months`
-                : (lang==="es") ? `Duración del proyecto: ${ml.duracao_meses} meses`
-                : `Duração do projeto: ${ml.duracao_meses} meses`;
-
-      const children = [];
-      children.push(new Paragraph({ text: "MARCO LÓGICO", heading: HeadingLevel.HEADING_1 }));
-      children.push(new Paragraph({ text: L.geral, heading: HeadingLevel.HEADING_2 }));
-      children.push(new Paragraph(ml.objetivo_geral||""));
-      children.push(new Paragraph(dur));
-
-      (ml.objetivos_especificos||[]).forEach((oe,idx)=>{
-        children.push(new Paragraph({ text: `${L.oe(oe.numero||idx+1)}: ${oe.titulo}`, heading: HeadingLevel.HEADING_2 }));
-
-        if(oe.temas?.length){
-          const t = (lang==="en") ? `Themes: ${oe.temas.join(", ")}`
-                  : (lang==="es") ? `Temas: ${oe.temas.join(", ")}`
-                  : `Temas: ${oe.temas.join(", ")}`;
-          children.push(new Paragraph(t));
-        }
-
-        children.push(new Paragraph({ text: L.resultados, heading: HeadingLevel.HEADING_3 }));
-        (oe.resultados||[]).forEach((r)=>{
-          children.push(new Paragraph({ text: r.titulo, heading: HeadingLevel.HEADING_4 }));
-          children.push(new Paragraph(r.descricao || ""));
-          children.push(new Paragraph({ text: L.indic, heading: HeadingLevel.HEADING_5 }));
-          (r.indicadores||[]).forEach((ind)=>{
-            children.push(new Paragraph(new TextRun(`• ${ind.texto}`)));
-            children.push(new Paragraph(new TextRun(`${L.meta}: ${ind.meta}`)));
-            children.push(new Paragraph(new TextRun(`${L.mov}: ${joinMV(ind.meios_verificacao)}`)));
-          });
-        });
-
-        children.push(new Paragraph({ text: L.ativ, heading: HeadingLevel.HEADING_3 }));
-        (oe.resultados||[]).forEach((r)=>{
-          (r.atividades||[]).forEach((a)=>{
-            children.push(new Paragraph({ text: a.titulo, heading: HeadingLevel.HEADING_4 }));
-            children.push(new Paragraph(new TextRun(`${L.desc}: ${a.descricao}`)));
-            children.push(new Paragraph(new TextRun(`${L.log}: ${a.logica_intervencao}`)));
-            children.push(new Paragraph(new TextRun(`${L.prazo}: ${a.prazo}`)));
-            children.push(new Paragraph(new TextRun(`${L.mov}: ${joinMV(a.meios_verificacao)}`)));
-          });
-        });
-      });
-
-      const doc = new Document({ sections:[{ children }] });
-      const blob = await Packer.toBlob(doc);
-      const safe=(nomeProjeto||'Projeto').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `Marco_Logico_${safe}_${Date.now()}.docx`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 3000);
-    }
-
-    // Submit, webhook, and local generation
-    const frm=document.getElementById('frm');
-    const statusEl=document.getElementById('status');
-    const diagBox=document.getElementById('diagBox');
-    const dlX=document.getElementById('dlXlsx');
-    const dlD=document.getElementById('dlDocx');
-    let lastML=null, lastLang="pt";
-
-    dlX.addEventListener('click', ()=>{ if(lastML) baixarXlsx(lastML, document.getElementById('nomeProjeto').value, lastLang); });
-    dlD.addEventListener('click', ()=>{ if(lastML) baixarDocx(lastML, document.getElementById('nomeProjeto').value, lastLang); });
-
-    frm.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      try{
-        statusEl.textContent="Processando…";
-        statusEl.classList.remove('error','success');
-        diagBox.style.display='none'; diagBox.textContent='';
-
-        const lang=document.getElementById('lang').value||"pt"; lastLang=lang;
-        const nomeProjeto=clean(document.getElementById('nomeProjeto').value||"");
-        const desc=clean(document.getElementById('desc').value||"");
-        const n=parseInt(nOE.value||0);
-        const durationMonths=parseInt(document.getElementById('durMonths').value||0);
-
-        if(!nomeProjeto||!desc||!n) throw new Error("Preencha nome, descrição e qtd. de objetivos.");
-        if(!durationMonths || durationMonths<1 || durationMonths>60) throw new Error("Informe a duração do projeto, entre 1 e 60 meses.");
-
-        const objetivosEspecificos=[];
-        for(let i=1;i<=n;i++){
-          const t=clean(document.getElementById(`oe_t_${i}`).value||"");
-          const f=clean(document.getElementById(`oe_f_${i}`).value||"");
-          if(!t) throw new Error(`Preencha o título do OE ${i}.`);
-          objetivosEspecificos.push({numero:i,titulo:t,foco:f});
-        }
-
-        const file=document.getElementById('edital').files?.[0];
-        const editalText=clean(await readFileText(file));
-
-        // webhook, unchanged, now includes durationMonths
-        try{
-          await fetch(WEBHOOK_URL,{
-            method:'POST',
-            headers:{'Content-Type':'text/plain;charset=UTF-8'},
-            body: JSON.stringify({
-              nomeProjeto,
-              duracaoMeses: durationMonths,
-              descricaoProposta: desc,
-              objetivosEspecificos,
-              objetivosEspecificosTexto: objetivosEspecificos.map(o=>`${o.numero}. ${o.titulo}`).join(' || '),
-              edital: ""
-            })
-          });
-        }catch(_){}
-
-        const ml = generateML(nomeProjeto, desc, objetivosEspecificos, editalText, lang, durationMonths);
-
-        lastML=ml;
-        renderPreview(ml, lang);
-        statusEl.textContent="✓ OK";
-        statusEl.classList.add('success');
-
-        diagBox.style.display='block';
-        diagBox.textContent=[
-          "Diagnóstico:",
-          "1) Resultados e atividades são gerados a partir de temas extraídos da descrição e do edital, e não repetem o texto dos OEs.",
-          "2) Indicadores usam metas arredondadas, por exemplo 70%, 85%, 120 participantes.",
-          "3) Prazos são coerentes com a duração, distribuídos em três fases.",
-          "4) A saída mantém estrutura de marco lógico, sem padrões repetitivos do tipo Plan, Improve, Consolidate."
-        ].join("\n");
-      }catch(err){
-        statusEl.textContent="Erro: "+err.message;
-        statusEl.classList.add('error');
-        diagBox.style.display='block';
-        diagBox.textContent=(err.stack||String(err));
-      }
-    });
-  </script>
+    document.getElementById("out").style.display="block";
+  });
+</script>
 </body>
 </html>
+
