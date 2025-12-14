@@ -2,25 +2,23 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <title>Marco Lógico — Saída em Tabela</title>
+  <title>Gerador de Marco Lógico — Tabela</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
   <style>
-    :root{
-      --bg:#f3f3f3;
-      --table:#e6e6e6;
-      --head:#d9d9d9;
-      --line:#bfbfbf;
-      --ink:#1b1b1b;
-    }
-    *{box-sizing:border-box}
     body{
       margin:0;
       font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
       background:#fafafa;
-      color:var(--ink);
+      color:#1b1b1b;
     }
     .wrap{
       max-width:1200px;
@@ -28,26 +26,27 @@
       padding:20px;
     }
     h1{
-      margin:0 0 12px;
       font-size:24px;
+      margin-bottom:16px;
     }
     form{
       background:#fff;
       border:1px solid #ddd;
       border-radius:8px;
       padding:16px;
-      margin-bottom:20px;
+      margin-bottom:24px;
     }
     label{
-      display:block;
       font-weight:600;
-      margin:12px 0 6px;
+      display:block;
+      margin-top:12px;
+      margin-bottom:6px;
     }
     input, textarea, select{
       width:100%;
+      padding:8px;
       border:1px solid #ccc;
       border-radius:6px;
-      padding:8px;
       font:inherit;
     }
     textarea{min-height:90px}
@@ -58,61 +57,72 @@
     }
     button{
       margin-top:16px;
-      padding:10px 16px;
-      font-weight:600;
-      border:0;
-      border-radius:6px;
       background:#1E7E34;
       color:#fff;
+      border:0;
+      padding:10px 16px;
+      border-radius:6px;
+      font-weight:600;
       cursor:pointer;
     }
-    .table-wrap{
-      overflow:auto;
-      background:#fff;
-      border:1px solid #ccc;
-    }
+
     table{
       width:100%;
       border-collapse:collapse;
+      background:#e6e6e6;
       font-size:14px;
-      background:var(--table);
     }
     th, td{
-      border:1px solid var(--line);
+      border:1px solid #bfbfbf;
       padding:8px 10px;
       vertical-align:top;
     }
     th{
-      background:var(--head);
+      background:#d9d9d9;
       font-weight:600;
       text-align:left;
     }
     .col-obj{
       width:220px;
       font-weight:600;
-      background:var(--head);
+      background:#d9d9d9;
     }
-    .muted{
-      font-size:12px;
-      color:#555;
-      margin-top:6px;
+    .preview{
+      background:#fff;
+      border:1px solid #ccc;
+      padding:12px;
+      overflow:auto;
     }
   </style>
 </head>
 <body>
+
 <div class="wrap">
   <h1>Gerador de Marco Lógico</h1>
 
   <form id="frm">
-    <label>Objetivo Geral</label>
-    <textarea id="objGeral" required></textarea>
+    <label>Título do Projeto</label>
+    <input id="titulo" required>
+
+    <label>Descrição da Proposta</label>
+    <textarea id="descricao" required></textarea>
 
     <div class="row">
       <div>
-        <label>Duração do projeto, em meses</label>
-        <input type="number" id="duracao" min="1" max="60" value="12" required>
-        <div class="muted">A duração é exibida nas metas, não altera atividades.</div>
+        <label>Idioma de saída</label>
+        <select id="lang">
+          <option value="pt" selected>Português</option>
+          <option value="en">English</option>
+          <option value="es">Español</option>
+        </select>
       </div>
+      <div>
+        <label>Duração do projeto, em meses</label>
+        <input type="number" id="meses" value="12" min="1" max="60" required>
+      </div>
+    </div>
+
+    <div class="row">
       <div>
         <label>Número de Objetivos Específicos</label>
         <select id="nOE">
@@ -122,121 +132,116 @@
           <option>4</option>
         </select>
       </div>
+      <div>
+        <label>Arquivo do Edital, opcional</label>
+        <input type="file" id="edital" accept=".pdf,.docx,.txt">
+      </div>
     </div>
 
-    <div id="oes"></div>
-
-    <button type="submit">Gerar Tabela</button>
+    <button type="submit">Gerar Marco Lógico</button>
   </form>
 
-  <div class="table-wrap" id="out" style="display:none">
+  <div id="previewBox" class="preview" style="display:none">
     <table id="tbl"></table>
+    <button id="baixarXlsx">Baixar XLSX</button>
   </div>
 </div>
 
 <script>
-  const oesDiv = document.getElementById("oes");
-  const nOE = document.getElementById("nOE");
+function gerarTextoBase(desc){
+  return desc.split(".")[0] || desc;
+}
 
-  function renderOEInputs(){
-    oesDiv.innerHTML="";
-    const n = parseInt(nOE.value);
-    for(let i=1;i<=n;i++){
-      const div=document.createElement("div");
-      div.innerHTML=`
-        <label>Objetivo Específico ${i}</label>
-        <textarea id="oe_${i}" required></textarea>
+function gerarMarcoLogico({titulo, descricao, nOE, meses}){
+  const og = `Fortalecer ${titulo.toLowerCase()}, ampliando capacidades locais e promovendo impactos socioambientais sustentáveis ao longo de ${meses} meses.`;
 
-        <table style="margin-top:8px;width:100%;border-collapse:collapse">
-          <tr>
-            <th>Resultados</th>
-            <th>Indicadores</th>
-            <th>Meta</th>
-            <th>Meios de Verificação</th>
-          </tr>
-          <tr>
-            <td><textarea id="r_${i}_1"></textarea></td>
-            <td><textarea id="ind_${i}_1"></textarea></td>
-            <td><textarea id="meta_${i}_1"></textarea></td>
-            <td><textarea id="mv_${i}_1"></textarea></td>
-          </tr>
-          <tr>
-            <td><textarea id="r_${i}_2"></textarea></td>
-            <td><textarea id="ind_${i}_2"></textarea></td>
-            <td><textarea id="meta_${i}_2"></textarea></td>
-            <td><textarea id="mv_${i}_2"></textarea></td>
-          </tr>
-          <tr>
-            <td><textarea id="r_${i}_3"></textarea></td>
-            <td><textarea id="ind_${i}_3"></textarea></td>
-            <td><textarea id="meta_${i}_3"></textarea></td>
-            <td><textarea id="mv_${i}_3"></textarea></td>
-          </tr>
-        </table>
-      `;
-      oesDiv.appendChild(div);
-    }
+  const oes = [];
+  for(let i=1;i<=nOE;i++){
+    oes.push({
+      titulo:`Aprimorar capacidades institucionais e comunitárias relacionadas ao eixo ${i}.`,
+      resultados:[
+        {
+          r:"Capacidades técnicas e organizacionais fortalecidas.",
+          ind:"Número de participantes envolvidos; nível de satisfação.",
+          meta:`≥ ${Math.round(1000/nOE)} pessoas capacitadas em ${meses} meses.`,
+          mv:"Listas de presença; relatórios técnicos."
+        },
+        {
+          r:"Iniciativas locais estruturadas e em funcionamento.",
+          ind:"Número de iniciativas apoiadas.",
+          meta:`≥ ${Math.round(10/nOE)} iniciativas estruturadas.`,
+          mv:"Planos de ação; registros fotográficos."
+        }
+      ]
+    });
   }
-  nOE.addEventListener("change", renderOEInputs);
-  renderOEInputs();
+  return {og, oes};
+}
 
-  document.getElementById("frm").addEventListener("submit", e=>{
-    e.preventDefault();
-    const tbl=document.getElementById("tbl");
-    tbl.innerHTML="";
+function renderTabela(ml){
+  const tbl=document.getElementById("tbl");
+  tbl.innerHTML="";
 
-    const dur=document.getElementById("duracao").value;
-    const og=document.getElementById("objGeral").value;
+  tbl.innerHTML+=`
+    <tr>
+      <td class="col-obj">Objetivo Geral</td>
+      <td colspan="4">${ml.og}</td>
+    </tr>
+  `;
 
-    // Objetivo Geral
+  ml.oes.forEach((oe,idx)=>{
     tbl.innerHTML+=`
       <tr>
-        <td class="col-obj">Objetivo Geral</td>
-        <td colspan="4">${og}</td>
+        <td class="col-obj">Objetivo Específico ${idx+1}</td>
+        <td colspan="4"><em>${oe.titulo}</em></td>
+      </tr>
+      <tr>
+        <th></th>
+        <th>Resultados</th>
+        <th>Indicadores</th>
+        <th>Meta</th>
+        <th>Meios de Verificação</th>
       </tr>
     `;
-
-    const n=parseInt(nOE.value);
-    for(let i=1;i<=n;i++){
-      const oe=document.getElementById(`oe_${i}`).value;
-
+    oe.resultados.forEach(r=>{
       tbl.innerHTML+=`
         <tr>
-          <td class="col-obj">Objetivo Específico ${i}</td>
-          <td colspan="4"><em>${oe}</em></td>
-        </tr>
-        <tr>
-          <th></th>
-          <th>Resultados</th>
-          <th>Indicadores</th>
-          <th>Meta</th>
-          <th>Meios de Verificação</th>
+          <td></td>
+          <td>${r.r}</td>
+          <td>${r.ind}</td>
+          <td>${r.meta}</td>
+          <td>${r.mv}</td>
         </tr>
       `;
-
-      for(let j=1;j<=3;j++){
-        const r=document.getElementById(`r_${i}_${j}`).value;
-        const ind=document.getElementById(`ind_${i}_${j}`).value;
-        const meta=document.getElementById(`meta_${i}_${j}`).value;
-        const mv=document.getElementById(`mv_${i}_${j}`).value;
-
-        if(!r && !ind && !meta && !mv) continue;
-
-        tbl.innerHTML+=`
-          <tr>
-            <td></td>
-            <td>${r}</td>
-            <td>${ind}</td>
-            <td>${meta.replace(/\{meses\}/g,dur)}</td>
-            <td>${mv}</td>
-          </tr>
-        `;
-      }
-    }
-
-    document.getElementById("out").style.display="block";
+    });
   });
+}
+
+document.getElementById("frm").addEventListener("submit",e=>{
+  e.preventDefault();
+
+  const data={
+    titulo:document.getElementById("titulo").value,
+    descricao:document.getElementById("descricao").value,
+    nOE:parseInt(document.getElementById("nOE").value),
+    meses:parseInt(document.getElementById("meses").value)
+  };
+
+  const ml=gerarMarcoLogico(data);
+  renderTabela(ml);
+
+  document.getElementById("previewBox").style.display="block";
+
+  document.getElementById("baixarXlsx").onclick=()=>{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.table_to_sheet(document.getElementById("tbl"));
+    XLSX.utils.book_append_sheet(wb,ws,"Marco Lógico");
+    XLSX.writeFile(wb,"marco_logico.xlsx");
+  };
+});
 </script>
+
 </body>
 </html>
+
 
